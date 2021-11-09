@@ -1,5 +1,5 @@
 #include "dict.h"
-#include "../avl/avl.h"
+#include "avl/avl.h"
 #include <stdlib.h>
 #include <stdio.h>
 

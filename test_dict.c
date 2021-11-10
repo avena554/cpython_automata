@@ -49,9 +49,10 @@ int main(int argc, char **argv){
   for(dict_item current = (*(it.next))(&it); current != NULL; current = (*(it.next))(&it)){
     fprintf(stderr, "\tretrieved: %s\n", (char *)current->elem);
   }
-  (*(it.destroy))(&it);
+  (*(it.destroy_data))(&it);
   fprintf(stderr, "...done\n");
   fprintf(stderr, "destroying dict\n");
   dict_destroy(d);
   fprintf(stderr, "...done\n");
+  return 0;
 }

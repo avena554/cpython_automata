@@ -21,7 +21,7 @@ typedef struct dict_iterator *dict_iterator;
 struct dict_iterator{
   void *data;
   dict_item (*next)(dict_iterator it);
-  void (*destroy)(dict_iterator it);
+  void (*destroy_data)(dict_iterator it);
 };
 
 

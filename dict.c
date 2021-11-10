@@ -60,7 +60,7 @@ dict_item next(dict_iterator it){
   return (dict_item)(avl_t_next(((struct avl_traverser*)(it->data))));
 }
 
-void destroy(dict_iterator it){
+void destroy_data(dict_iterator it){
   free(it->data);
 }
 
@@ -68,7 +68,7 @@ void init_iterator(void *d, dict_iterator it){
   it->data = malloc(sizeof(struct avl_traverser));
   avl_t_init(it->data, (struct avl_table *)d);
   it->next = &next;
-  it->destroy = &destroy;
+  it->destroy_data = &destroy_data;
 }
 
 

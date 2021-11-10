@@ -3,9 +3,8 @@
 
 struct int_iterator{
   void *data;
-  int (*has_next)(int_iterator it);
   int (*next)(int_iterator it);
-  void (*destroy)(int_iterator it);
+  void (*destroy_data)(int_iterator it);
 };
 typedef struct int_iterator int_iterator;
 

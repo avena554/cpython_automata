@@ -19,6 +19,7 @@ int max_rule_width(rule *rules, int n_rules){
 
 struct concrete_automaton_data{
   int *rules_mat;
+  int *sizes;
   int n_rules;
   void *td_index;
   void *bu_index;
@@ -28,7 +29,7 @@ struct concrete_automaton_data{
 automaton create_concrete_automaton(int n_states, int n_symb, rule *rules, int n_rules){
   int max_w = max_rule_width(rules, n_rules);
   int c_size = max_w + 2;
-  int *data = malloc(sizeof(int[n_rules][c_size]));
+  int *rules_mat = malloc(sizeof(int[n_rules][c_size]));
   int *sizes = malloc(sizeof(int[n_rules]));
   
   
@@ -41,7 +42,9 @@ automaton create_concrete_automaton(int n_states, int n_symb, rule *rules, int n
     sizes[r] = current_rule->width;
   }
 
-  a = malloc(sizeof(struct automaton));
+  struct concrete_automaton_data *data = malloc(sizeof(struct automaton));
+  
+   
  
   
 }

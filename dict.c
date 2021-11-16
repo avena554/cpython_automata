@@ -6,7 +6,6 @@
 int int_cmp_fn(const void *k1, const void *k2){
   int x = *((int *)k1);
   int y = *((int *)k2);
-  fprintf(stderr, "comparing %d and %d\n", x, y);
   if(x < y){
     return -1;
   }else if(x > y){
@@ -33,27 +32,34 @@ void destroy_item(void *item, void *params){
   free(item);
 }
 
-void *dict_create(struct item_type_parameters *params){
-  return avl_create(&cmp_item, params, NULL);
+void *dict_create(const struct item_type_parameters *params){
+  void *avl_params = (void *)params;
+  return avl_create(&cmp_item, avl_params, NULL);
 }
 
 void dict_destroy(void *d){
   avl_destroy((struct avl_table *)d, &destroy_item);
 }
 
-void set_item(void *d, void *key, void *elem){
+void set_item(const void *d, void *key, void *elem){
   dict_item item = malloc(sizeof(struct dict_item));
   item->key = key;
   item->elem = elem;
   avl_insert((struct avl_table *)d, item);    
 }
 
-void *get_item(void *d, void *key){
+void *get_item(const void *d, void *key){
   struct dict_item item = {
     key,
     NULL
   };
-  return ((dict_item)avl_find((struct avl_table *)d, &item))->elem;
+  void *retrieved = avl_find((struct avl_table *)d, &item);
+  if(retrieved != NULL){
+    return ((dict_item)retrieved)->elem;
+  }
+  else{
+    return NULL;
+  }
 }
 
 dict_item next(dict_iterator it){
@@ -64,7 +70,7 @@ void destroy_data(dict_iterator it){
   free(it->data);
 }
 
-void init_iterator(void *d, dict_iterator it){
+void init_iterator(const void *d, dict_iterator it){
   it->data = malloc(sizeof(struct avl_traverser));
   avl_t_init(it->data, (struct avl_table *)d);
   it->next = &next;

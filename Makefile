@@ -11,6 +11,7 @@ dict.o: dict.c avl
 	$(CC) $(CFLAGS) -c  dict.c -o $@
 
 test_dict: dict.o avl/avl.o test_dict.c
+test_automata: automata.o dict.o avl/avl.o test_automata.c
 
 clean:
 	rm -f *.o

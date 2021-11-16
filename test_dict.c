@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main(int argc, char **argv){
+int main(){
 
   fprintf(stderr, "setting up keys and values\n");
   char *e1 = malloc(4*sizeof(int));
@@ -25,7 +25,7 @@ int main(int argc, char **argv){
   struct item_type_parameters params = {
     &int_cmp_fn,
     NULL,
-    (void (*)(const void *))(&free)
+    (void (*)(void *))(&free)
   };
   void *d = dict_create(&params);
   fprintf(stderr, "...done\n");

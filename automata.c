@@ -124,6 +124,7 @@ void explicit_bu_query(const automaton a, int *children, int width, label_to_rul
   key[0] = width;
   memcpy(key + 1, children, width * sizeof(int));
   void *data = get_item(explicit->bu_index, key);
+  free(key);
   l_to_rs->data = data;
   l_to_rs->query = &explicit_ruleset_init;
 }

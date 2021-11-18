@@ -1,18 +1,18 @@
 #ifndef AUTOMATA_H
 #define AUTOMATA_H
 
-typedef struct int_iterator *int_iterator;
-struct int_iterator{
+typedef struct rule_iterator *rule_iterator;
+struct rule_iterator{
   void *data;
-  int *(*next)(int_iterator it);
-  void (*destroy_data)(int_iterator it);
+  int *(*next)(rule_iterator it);
+  void (*destroy_data)(rule_iterator it);
 };
 
 
 typedef struct ruleset *ruleset;
 struct ruleset{
   void *data;
-  void (*init_iterator)(const ruleset rs, int_iterator it);
+  void (*init_iterator)(const ruleset rs, rule_iterator it);
 };
 
 
@@ -34,7 +34,7 @@ typedef struct automaton *automaton;
 struct automaton{
   void *data;
   void (*td_query)(const automaton a, int parent_state, label_to_ruleset l_to_rs);
-  void (*bu_query)(const automaton a, int *children_states, int width, label_to_ruleset l_to_rs);
+  void (*bu_query)(const automaton a, int *children, int width, label_to_ruleset l_to_rs);
   void (*set_rule)(const automaton a, int rule_index, rule target);
   void (*all_rules)(const automaton a, ruleset target);
   void (*destroy)(automaton a);

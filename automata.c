@@ -5,6 +5,7 @@
 //debug
 #include <stdio.h>
 #include "avl/avl.h"
+void print_int_array(int *array, int width);
 
 const struct item_type_parameters PARENT_MAP_P = {
   &int_cmp_fn,
@@ -119,9 +120,9 @@ void explicit_td_query(const automaton a, int parent_state, label_to_ruleset l_t
 
 void explicit_bu_query(const automaton a, int *children, int width, label_to_ruleset l_to_rs){
   struct explicit_automaton_data *explicit = (struct explicit_automaton_data *)a->data;
-  int *key = malloc(sizeof(int[width+1]));
+  int *key = malloc((width + 1) * sizeof(int));
   key[0] = width;
-  memcpy(key + 1, children, width);
+  memcpy(key + 1, children, width * sizeof(int));
   void *data = get_item(explicit->bu_index, key);
   l_to_rs->data = data;
   l_to_rs->query = &explicit_ruleset_init;
@@ -182,7 +183,7 @@ void explicit_destroy(automaton a){
 automaton create_explicit_automaton(int n_states, int n_symb, rule *rules, int n_rules){
   int max_w = max_rule_width(rules, n_rules);
   int s_size = explicit_rule_storage_size(max_w);
-  int *rules_mat = malloc(sizeof(int[n_rules][s_size]));
+  int *rules_mat = malloc(n_rules * s_size * sizeof(int));
   rule current_rule  = NULL;
   int *row = NULL;
   void *td_index = NULL;
@@ -196,7 +197,7 @@ automaton create_explicit_automaton(int n_states, int n_symb, rule *rules, int n
     row[1] = current_rule->parent;
     row[2] = current_rule->label;
     row[3] = current_rule->width;
-    memcpy(row + 4, current_rule->children, sizeof(int[current_rule->width]));
+    memcpy(row + 4, current_rule->children, current_rule->width * sizeof(int));
   }
 
   struct explicit_automaton_data *data = malloc(sizeof(struct explicit_automaton_data));
@@ -246,7 +247,7 @@ void build_td_index_from_explicit(const automaton a){
   }
 }
 
-void build_bu_index_from_explicit(automaton a){
+void build_bu_index_from_explicit(const automaton a){
   struct explicit_automaton_data *data = (struct explicit_automaton_data *)a->data;
   int s_size = explicit_rule_storage_size(data->max_w);
   int *rules_mat = data->rules_mat;
@@ -254,16 +255,17 @@ void build_bu_index_from_explicit(automaton a){
     int *rule = rules_mat + i*s_size;
     int *label = rule + 2;
     int *width_and_children = rule + 3;
-    void *l_to_rs = get_or_create(data->bu_index, width_and_children, &CHILDREN_MAP_P);
+    void *l_to_rs = get_or_create(data->bu_index, width_and_children, &LABEL_MAP_P);
     void *rs = get_or_create(l_to_rs, label, &RULE_SET_P);
     set_item(rs, rule, NULL);
   }
 }
 
 int children_cmp_fn(const void *k1, const void *k2){
+  
   int *actual_k1 = (int *)k1;
   int *actual_k2 = (int *)k2;
-
+ 
   int cmp = 0;
   int s1 = actual_k1[0];
   int s2 = actual_k2[0];
@@ -289,4 +291,15 @@ void init_rule(int parent, int label, int *children, int width, rule target){
     width
   };
   *target = r;
+}
+
+void print_int_array(int *array, int width){
+  fprintf(stderr, "[");
+  for(int j = 0; j < width; ++j){
+    fprintf(stderr, "%d", array[j]);
+    if(j < width - 1){
+      fprintf(stderr, ", ");
+    }
+  }
+  fprintf(stderr, "]\n");
 }

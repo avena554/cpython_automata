@@ -47,6 +47,7 @@ void init_rule(int parent, int label, int *children, int width, rule target);
 
 automaton create_explicit_automaton(int n_states, int n_symb, rule *rules, int n_rules);
 void build_td_index_from_explicit(const automaton a);
+void build_bu_index_from_explicit(const automaton a);
 
 int children_cmp_fn(const void *k1, const void *k2);
 

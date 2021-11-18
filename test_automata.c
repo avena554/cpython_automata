@@ -26,8 +26,11 @@ int main(void){
   fprintf(stderr, "creating automaton...\n");
   automaton a = make_test();
   fprintf(stderr, "...done\n");
-  fprintf(stderr, "building top down index...\n");
+  fprintf(stderr, "building top-down index...\n");
   build_td_index_from_explicit(a);
+  fprintf(stderr, "...done\n");
+    fprintf(stderr, "building bottom-up index...\n");
+  build_bu_index_from_explicit(a);
   fprintf(stderr, "...done\n");
 
   fprintf(stderr, "traversing all rules...\n");
@@ -62,7 +65,7 @@ int main(void){
       for(int *rule = it.next(&it); rule != NULL; rule = it.next(&it)){
 	struct rule rule_data;
 	a->set_rule(a, *rule, &rule_data);
-	fprintf(stderr, "\t%d->%d(", rule_data.parent, rule_data.label);
+	fprintf(stderr, "\t\t\t%d->%d(", rule_data.parent, rule_data.label);
 	for(int i = 0; i < rule_data.width; ++i){
 	  fprintf(stderr, "%d", rule_data.children[i]);
 	  if(i < rule_data.width - 1){
@@ -75,6 +78,47 @@ int main(void){
     }    
   }
   fprintf(stderr, "...done\n");
+
+  fprintf(stderr, "accessing rules bottom-up...\n");
+  int query1[3] = {1, 1, 1};
+  int query2[2] = {1, 2};
+  int query3[1] = {0};
+  int *queries[3] = {query1, query2, query3};
+  int widths[3] = {3, 2, 1};
+  
+  for(int i = 0; i < 3; ++i){
+    fprintf(stderr, "\tquerrying for children [");
+    for(int j = 0; j < widths[i]; ++j){
+      fprintf(stderr, "%d", queries[i][j]);
+      if(j < widths[i] - 1){
+	fprintf(stderr, ", ");
+      }
+    }
+    fprintf(stderr, "]\n");
+    
+    struct label_to_ruleset l_to_rs;
+    a->bu_query(a, queries[i], widths[i], &l_to_rs);
+    for(int label = 0; label < a->n_symb; ++label){
+      fprintf(stderr, "\t\tquerrying for label %d...\n", label);
+      l_to_rs.query(&l_to_rs, label, &rs);
+      rs.init_iterator(&rs, &it);
+      for(int *rule = it.next(&it); rule != NULL; rule = it.next(&it)){
+	struct rule rule_data;
+	a->set_rule(a, *rule, &rule_data);
+	fprintf(stderr, "\t\t\t%d->%d(", rule_data.parent, rule_data.label);
+	for(int i = 0; i < rule_data.width; ++i){
+	  fprintf(stderr, "%d", rule_data.children[i]);
+	  if(i < rule_data.width - 1){
+	    fprintf(stderr, ", ");
+	  }
+	}
+	fprintf(stderr, ")\n");
+      }
+      it.destroy_data(&it);
+    }
+  }
+  fprintf(stderr, "...done\n");
+  
   
   fprintf(stderr, "destroying automaton...\n");
   a->destroy(a);

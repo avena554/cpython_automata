@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -W -Wall -std=c11 # enable many GCC warning
+CFLAGS = -g -W -Wall -Wextra -std=c11 # enable many GCC warning
 LDFLAGS = -g
 
 avl:

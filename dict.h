@@ -19,9 +19,8 @@ struct item_type_parameters{
 
 typedef struct dict_iterator *dict_iterator;
 struct dict_iterator{
-  void *data;
   dict_item (*next)(dict_iterator it);
-  void (*destroy_data)(dict_iterator it);
+  void (*destroy)(dict_iterator it);
 };
 
 void *dict_create(const struct item_type_parameters *params);
@@ -32,7 +31,7 @@ void *get_item(const void *d, void *key);
 
 int int_cmp_fn(const void *k1, const void *k2);
 
-void init_iterator(const void *d, dict_iterator it);
+dict_iterator dict_items(const void *d); 
 
 
 #endif /*int_dict.h*/

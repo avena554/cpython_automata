@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+typedef struct avl_dict_iterator *avl_dict_iterator;
+struct avl_dict_iterator{
+  struct dict_iterator head;
+  struct avl_traverser avl_it;
+};
+
 int int_cmp_fn(const void *k1, const void *k2){
   int x = *((int *)k1);
   int y = *((int *)k2);
@@ -62,19 +68,20 @@ void *get_item(const void *d, void *key){
   }
 }
 
-dict_item next(dict_iterator it){
-  return (dict_item)(avl_t_next(((struct avl_traverser*)(it->data))));
+dict_item dict_iterator_next(dict_iterator it){
+  return (dict_item)(avl_t_next((struct avl_traverser*)&(((avl_dict_iterator)it)->avl_it)));
 }
 
-void destroy_data(dict_iterator it){
-  free(it->data);
+void dict_iterator_destroy(dict_iterator it){
+  free(it);
 }
 
-void init_iterator(const void *d, dict_iterator it){
-  it->data = malloc(sizeof(struct avl_traverser));
-  avl_t_init(it->data, (struct avl_table *)d);
-  it->next = &next;
-  it->destroy_data = &destroy_data;
+dict_iterator dict_items(const void *d){
+  avl_dict_iterator wrapped_it = malloc(sizeof(struct avl_dict_iterator));
+  avl_t_init(&(wrapped_it->avl_it), (struct avl_table *)d);
+  wrapped_it->head.next = &dict_iterator_next;
+  wrapped_it->head.destroy = &dict_iterator_destroy;
+  return (dict_iterator)wrapped_it;
 }
 
 

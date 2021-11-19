@@ -44,12 +44,11 @@ int main(){
   }
   fprintf(stderr, "...done\n");
   fprintf(stderr, "traversing dict\n");
-  struct dict_iterator it;
-  init_iterator(d, &it);
-  for(dict_item current = (*(it.next))(&it); current != NULL; current = (*(it.next))(&it)){
+  dict_iterator it = dict_items(d);
+  for(dict_item current = it->next(it); current != NULL; current = it->next(it)){
     fprintf(stderr, "\tretrieved: %s\n", (char *)current->elem);
   }
-  (*(it.destroy_data))(&it);
+  it->destroy(it);
   fprintf(stderr, "...done\n");
   fprintf(stderr, "destroying dict\n");
   dict_destroy(d);

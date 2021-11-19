@@ -34,13 +34,12 @@ int main(void){
   fprintf(stderr, "...done\n");
 
   fprintf(stderr, "traversing all rules...\n");
-  struct rule_iterator it;
-  struct ruleset rs;
-  a->all_rules(a, &rs);
-  rs.init_iterator(&rs, &it);
-  for(int *rule = it.next(&it); rule != NULL; rule = it.next(&it)){
+
+  ruleset rs = a->all_rules(a);
+  rule_iterator it = rs->create_iterator(rs);
+  for(int *rule = it->next(it); rule != NULL; rule = it->next(it)){
     struct rule rule_data;
-    a->set_rule(a, *rule, &rule_data);
+    a->fill_rule(a, &rule_data, *rule);
     fprintf(stderr, "\t%d->%d(", rule_data.parent, rule_data.label);
     for(int i = 0; i < rule_data.width; ++i){
       fprintf(stderr, "%d", rule_data.children[i]);
@@ -50,21 +49,21 @@ int main(void){
     }
     fprintf(stderr, ")\n");
   }
-  it.destroy_data(&it);
+  it->destroy(it);
+  rs->destroy(rs);
   fprintf(stderr, "...done\n");
 
   fprintf(stderr, "accessing rules top down...\n");
   for(int i = 0; i < a->n_states; ++i){
-    fprintf(stderr, "\tquerrying for parent %d...\n", i);
-    struct label_to_ruleset l_to_rs;
-    a->td_query(a, i, &l_to_rs);
+    fprintf(stderr, "\tquerrying for parent %d...\n", i);    
+    label_to_ruleset l_to_rs = a->td_query(a, i);
     for(int label = 0; label < a->n_symb; ++label){
       fprintf(stderr, "\t\tquerrying for label %d...\n", label);
-      l_to_rs.query(&l_to_rs, label, &rs);
-      rs.init_iterator(&rs, &it);
-      for(int *rule = it.next(&it); rule != NULL; rule = it.next(&it)){
+      ruleset rs = l_to_rs->query(l_to_rs, label);
+      rule_iterator it = rs->create_iterator(rs);
+      for(int *rule = it->next(it); rule != NULL; rule = it->next(it)){
 	struct rule rule_data;
-	a->set_rule(a, *rule, &rule_data);
+	a->fill_rule(a, &rule_data, *rule);
 	fprintf(stderr, "\t\t\t%d->%d(", rule_data.parent, rule_data.label);
 	for(int i = 0; i < rule_data.width; ++i){
 	  fprintf(stderr, "%d", rule_data.children[i]);
@@ -74,8 +73,10 @@ int main(void){
 	}
 	fprintf(stderr, ")\n");
       }
-      it.destroy_data(&it);
-    }    
+      it->destroy(it);
+      rs->destroy(rs);
+    }
+    l_to_rs->destroy(l_to_rs);
   }
   fprintf(stderr, "...done\n");
 
@@ -96,15 +97,14 @@ int main(void){
     }
     fprintf(stderr, "]\n");
     
-    struct label_to_ruleset l_to_rs;
-    a->bu_query(a, queries[i], widths[i], &l_to_rs);
+    label_to_ruleset l_to_rs = a->bu_query(a, queries[i], widths[i]);
     for(int label = 0; label < a->n_symb; ++label){
       fprintf(stderr, "\t\tquerrying for label %d...\n", label);
-      l_to_rs.query(&l_to_rs, label, &rs);
-      rs.init_iterator(&rs, &it);
-      for(int *rule = it.next(&it); rule != NULL; rule = it.next(&it)){
+      ruleset rs = l_to_rs->query(l_to_rs, label);
+      rule_iterator it = rs->create_iterator(rs);
+      for(int *rule = it->next(it); rule != NULL; rule = it->next(it)){
 	struct rule rule_data;
-	a->set_rule(a, *rule, &rule_data);
+	a->fill_rule(a, &rule_data, *rule);
 	fprintf(stderr, "\t\t\t%d->%d(", rule_data.parent, rule_data.label);
 	for(int i = 0; i < rule_data.width; ++i){
 	  fprintf(stderr, "%d", rule_data.children[i]);
@@ -114,8 +114,10 @@ int main(void){
 	}
 	fprintf(stderr, ")\n");
       }
-      it.destroy_data(&it);
+      it->destroy(it);
+      rs->destroy(rs);
     }
+    l_to_rs->destroy(l_to_rs);
   }
   fprintf(stderr, "...done\n");
   

@@ -77,11 +77,11 @@ int explicit_rule_storage_size(int max_width){
   return max_width + 4;
 }
 
-int max_rule_width(rule *rules, int n_rules){
+int max_rule_width(struct rule *rules, int n_rules){
   int max_w = 0;
   int current_w;
   for(int i = 0; i < n_rules; ++i){
-    current_w = rules[i]->width; 
+    current_w = rules[i].width; 
     if(current_w >= max_w){
       max_w = current_w;
     }
@@ -178,14 +178,14 @@ label_to_ruleset explicit_bu_query(const automaton a, int *children, int width){
   return (label_to_ruleset)wrapped_map;
 }
 
-void explicit_set_rule_from_row(int *row, rule target){
+void explicit_set_rule_from_row(int *row, struct rule *target){
   target->parent = row[1];
   target->label = row[2];
   target->width = row[3];
   target->children = row + 4;
 }
 
-void explicit_fill_rule(const automaton a, rule target, int rule_index){
+void explicit_fill_rule(const automaton a, struct rule *target, int rule_index){
   explicit_automaton explicit = (explicit_automaton)a;
   int s_size = explicit_rule_storage_size(explicit->max_w);
   int *row = explicit->rules_mat + rule_index * s_size;
@@ -235,18 +235,18 @@ void explicit_destroy(automaton a){
   free(explicit);
 }
 
-automaton create_explicit_automaton(int n_states, int n_symb, rule *rules, int n_rules){
+automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules, int n_rules){
   int max_w = max_rule_width(rules, n_rules);
   int s_size = explicit_rule_storage_size(max_w);
   int *rules_mat = malloc(n_rules * s_size * sizeof(int));
-  rule current_rule  = NULL;
+  struct rule *current_rule  = NULL;
   int *row = NULL;
   void *td_index = NULL;
   void *bu_index  = NULL;
   explicit_automaton a = malloc(sizeof(struct explicit_automaton));
   
   for(int r = 0; r < n_rules; ++r){
-    current_rule = rules[r];
+    current_rule = rules + r;
     row = rules_mat + r*s_size;
     // store the rule index as its name
     row[0] = r;
@@ -336,7 +336,7 @@ int children_cmp_fn(const void *k1, const void *k2){
   return s1 - s2;
 }
 
-void init_rule(int parent, int label, int *children, int width, rule target){
+void init_rule(int parent, int label, int *children, int width, struct rule *target){
   struct rule r = {
     parent,
     label,

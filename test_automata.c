@@ -15,7 +15,7 @@ automaton make_test(){
     0, 0, c3, 1
   };
 
-  rule rs[3] = {&r1, &r2, &r3};
+  struct rule rs[3] = {r1, r2, r3};
   automaton a = create_explicit_automaton(3, 2, rs, 3);
   return a;
 }

@@ -2,7 +2,8 @@
 #include <Python.h>
 #include "automata.h"
 
-/* TODO: Use python dedicated memory allocators instead of malloc
+/* 
+ * TODO: Use python dedicated memory allocators instead of malloc
  * make automata.h able to receive configuration for the allocator.
  */
 typedef struct{
@@ -14,6 +15,7 @@ typedef struct{
 /* C methods for the type automaton */
 static PyObject *rules_from_parent(PyObject *self, PyObject *args);
 static PyObject *get_rule(PyObject *self, PyObject *args);
+static PyObject *rules_from_children(PyObject *self, PyObject *args);
 
 static void pyta_automaton_dealloc(PyObject *o){
   fprintf(stderr, "Python is destroying the automaton\n");
@@ -38,6 +40,9 @@ static PyMethodDef pyta_automaton_methods[] = {
     {"rules_from_parent", rules_from_parent, METH_VARARGS,
      "Return a list of indices of rules applicable from a given parent state"
     },
+    {"rules_from_children", rules_from_children, METH_VARARGS,
+     "Return a list of indices of rules applicable for a given list of children states"
+    },
     {"get_rule", get_rule, METH_VARARGS,
      "Return the rule corresponding to a given rule index"
     },
@@ -56,58 +61,92 @@ static PyTypeObject pyta_automaton_t = {
   .tp_methods = pyta_automaton_methods,
 };
 
-void clean_several(int n_pointers, void *const pointers[]){
+static void clean_several(int n_pointers, void *const pointers[]){
   for(int i = 0; i < n_pointers; ++i){
       free(pointers[i]);
   }
 }
 
-static PyObject *rules_from_parent(PyObject *self, PyObject *args){
-  automaton a = ((pyta_automaton *)self)->a;
-  int parent;
-
-  if(!PyArg_ParseTuple(args, "i", &parent)) return NULL;
-  label_to_ruleset outer_map = a->td_query(a, parent);
-
+static PyObject *PyList_from_lmap(label_to_ruleset lmap){
+  // count 'em rules
+  rule_iterator r_it = lmap->all_rules(lmap);
   int n_rules_out = 0;
-  for(int label = 0; label < a->n_symb; ++label){
-    ruleset rs = outer_map->query(outer_map, label);
-    rule_iterator r_it = rs->create_iterator(rs);
-    for(int *rule_index = r_it->next(r_it); rule_index != NULL; rule_index = r_it->next(r_it)){
+  for(int *rule_index = r_it->next(r_it); rule_index != NULL; rule_index = r_it->next(r_it)){
       ++n_rules_out;
-    }
-    r_it->destroy(r_it);
-    rs->destroy(rs);
   }
+  r_it->destroy(r_it);
 
+  // create the returned Python list, with appropriate size
   PyObject *out_list = PyList_New(n_rules_out);
   if(out_list == NULL)
     return NULL;
 
-  int k = 0;
-  for(int label = 0; label < a->n_symb; ++label){
-    ruleset rs = outer_map->query(outer_map, label);
-    rule_iterator r_it = rs->create_iterator(rs);
-    for(int *rule_index = r_it->next(r_it); rule_index != NULL; rule_index = r_it->next(r_it)){
-      PyObject *py_index = Py_BuildValue("i", *rule_index);
-      if(py_index == NULL){
-	Py_DECREF(out_list);
-	return NULL;
-      }      
+  // populate the list
+  r_it = lmap->all_rules(lmap);
+  Py_ssize_t k = 0;
+  for(int *rule_index = r_it->next(r_it); rule_index != NULL; rule_index = r_it->next(r_it)){
+    PyObject *py_index = Py_BuildValue("i", *rule_index);
+    if(py_index == NULL){
+      Py_DECREF(out_list);
+      return NULL;
+    }      
       
-      if(PyList_SetItem(out_list, k, py_index) != 0){
-	Py_DECREF(py_index);
-	Py_DECREF(out_list);
-	return NULL;
-      }
-      ++k;
+    if(PyList_SetItem(out_list, k, py_index) != 0){
+      Py_DECREF(out_list);
+      return NULL;
     }
-    r_it->destroy(r_it);
-    rs->destroy(rs);
+    ++k;
   }
+  r_it->destroy(r_it);
+  return out_list;
+}
+
+static PyObject *rules_from_parent(PyObject *self, PyObject *args){
+  automaton a = ((pyta_automaton *)self)->a;
+  int parent;
+  PyObject *out_list;
+
+  if(!PyArg_ParseTuple(args, "i", &parent)) return NULL;
+  label_to_ruleset lmap = a->td_query(a, parent);
+
+  out_list = PyList_from_lmap(lmap);
   
-  outer_map->destroy(outer_map);
+  lmap->destroy(lmap);
+  
   return out_list;  
+}
+
+static PyObject *rules_from_children(PyObject *self, PyObject *args){
+  automaton a = ((pyta_automaton *)self)->a;
+  PyObject *children;
+  PyObject *out_list;
+  Py_ssize_t n, i;
+  int *c_children;
+  
+  //parse a list from the arguments
+  if(!PyArg_ParseTuple(args, "O", &children) || !PySequence_Check(children)) return NULL;
+
+  n = PySequence_Size(children);
+  c_children = malloc(n*sizeof(int));
+
+  for(i = 0; i < n; ++i){
+    PyObject *child = PySequence_GetItem(children, i);    
+    if(!PyLong_Check(child)){
+      free(c_children);
+      return NULL;
+    }
+    long value = PyLong_AsLong(child);
+    Py_DECREF(child);
+    c_children[i] = (int)value;
+  }
+
+  label_to_ruleset lmap = a->bu_query(a, c_children, (int)n);
+
+  out_list = PyList_from_lmap(lmap);
+  
+  lmap->destroy(lmap);
+
+  return out_list;
 }
 
 static PyObject *get_rule(PyObject *self, PyObject *args){
@@ -136,7 +175,7 @@ static PyObject *get_rule(PyObject *self, PyObject *args){
     return NULL;
   }
 
-  int i;
+  Py_ssize_t i;
   for(i = 0; i < rule.width; ++i){
     PyObject *child = Py_BuildValue("i", rule.children[i]);
     if(child == NULL){
@@ -145,13 +184,10 @@ static PyObject *get_rule(PyObject *self, PyObject *args){
       Py_DECREF(children_tuple);
       return NULL;
     }
-    
-    /* because this is a brand new tuple, there is no item replaced, 
-     * hence no need to decref said item */
+
     if(PyTuple_SetItem(children_tuple, i, child) != 0){
       Py_DECREF(parent);
-      Py_DECREF(label);
-      Py_DECREF(child);
+      Py_DECREF(label);      
       Py_DECREF(children_tuple);
       return NULL;
     }
@@ -187,101 +223,115 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
   // fprintf(stderr, "there are %d states, %d symbols and %d rules\n", n_states, n_symb, (int)n_rules);
   // fprintf(stderr, "allocating space for rules\n");
 
-  struct rule *c_rules = malloc(n_rules * sizeof(struct rule));
-  PyObject **all_children_tuples = malloc(n_rules * sizeof(PyObject *));
+  struct rule *c_rules = malloc(n_rules * sizeof(struct rule));  
   int *all_rules_children = NULL;
-  void *const to_clean[3] = {c_rules, all_children_tuples, all_rules_children};
-  int n_to_clean = 2;
+  void *const to_clean[2] = {c_rules, all_rules_children};
+  int n_to_clean = 1;
   
   int sum_widths = 0;
 
   for(int i = 0; i < n_rules; ++i){
-    // fprintf(stderr, "parsing rule #%d\n", i);
-    // fprintf(stderr, "retrieving rule\n");
     PyObject *rule = PySequence_GetItem(rules, i);
     if(rule == NULL){
       clean_several(n_to_clean, to_clean);
       return NULL;
     }
-
-    // fprintf(stderr, "rule type: %s\n", rule->ob_type->tp_name);
-
-    // fprintf(stderr, "retrieving parent\n");
+    
     PyObject *parent = PySequence_GetItem(rule, 0);
     if(parent == NULL){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
-    // fprintf(stderr, "parent: %p\n", parent);
+
     int parent_index = (int)PyLong_AsLong(parent);
-    // fprintf(stderr, "parent: %d\n", parent_index);
     if(PyErr_Occurred() != NULL){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
+    // PySequence_GetItem makes a new ref
+    Py_DECREF(parent);
 
     // fprintf(stderr, "retrieving label\n");
     PyObject *label = PySequence_GetItem(rule, 1);
     if(label == NULL){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
     int label_index = (int)PyLong_AsLong(label);
     if(PyErr_Occurred() != NULL){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
+    Py_DECREF(label);
     
-    // fprintf(stderr, "retrieving children\n");
     PyObject *children_tuple = PySequence_GetItem(rule, 2);
     if(children_tuple == NULL){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
-    all_children_tuples[i] = children_tuple;
-
-    // fprintf(stderr, "retrieving width\n");
+    
     Py_ssize_t width = PySequence_Size(children_tuple);
     if(width < 0){
       clean_several(n_to_clean, to_clean);
+      Py_DECREF(rule);
       return NULL;
     }
     sum_widths += width;
+    Py_DECREF(children_tuple);
 
-   
-    // fprintf(stderr, "filling rule fields (except children)\n");
     c_rules[i].parent = parent_index;
     c_rules[i].label = label_index;
-    c_rules[i].width = (int)width;    
+    c_rules[i].width = (int)width;
+    Py_DECREF(rule);
   }
 
-  // fprintf(stderr, "allocating space for all rules children");
+  // allocating space for all rules children;
   all_rules_children = malloc(sum_widths * sizeof(int));
-  n_to_clean = 3;
+  n_to_clean = 2;
   int offset = 0;
   
-  for(int i = 0; i < n_rules; ++i){
-    // fprintf(stderr, "setting children for rule #%d\n", i);
-    for(int j = 0; j < c_rules[i].width; ++j){
-      // fprintf(stderr, "setting child #%d\n", j);
-      PyObject *children_tuple = all_children_tuples[i];
+  for(Py_ssize_t i = 0; i < n_rules; ++i){        
+    PyObject *rule = PySequence_GetItem(rules, i);
+    if(rule == NULL){
+      clean_several(n_to_clean, to_clean);
+      return NULL;
+    }
+      
+    PyObject *children_tuple = PySequence_GetItem(rule, (Py_ssize_t)2);
+    Py_DECREF(rule);
+    if(children_tuple == NULL){
+      clean_several(n_to_clean, to_clean);	
+      return NULL;
+    }
+    
+    for(Py_ssize_t j = 0; j < c_rules[(int)i].width; ++j){
       PyObject *child = PySequence_GetItem(children_tuple, j);
       if(child == NULL){
 	clean_several(n_to_clean, to_clean);
+	Py_DECREF(children_tuple);
 	return NULL;
       }
+      
       long child_index = PyLong_AsLong(child);
+      Py_DECREF(child);
       if(PyErr_Occurred() != NULL){
 	clean_several(n_to_clean, to_clean);
+	Py_DECREF(children_tuple);
 	return NULL;
       }
+      
       all_rules_children[offset + j] = (int)child_index;
     }
+    Py_DECREF(children_tuple);
     c_rules[i].children = all_rules_children + offset;
-    offset += c_rules[i].width;   
+    offset += c_rules[i].width;
   }
 
-  // fprintf(stderr, "creating automaton\n");
   PyObject *empty_tuple = PyTuple_New(0);
   if(empty_tuple == NULL){
     clean_several(n_to_clean, to_clean);
@@ -293,11 +343,10 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
   if(pa == NULL){
     clean_several(n_to_clean, to_clean);
     return NULL;
-  }   
-  pa->a = create_explicit_automaton(n_states, n_symb, c_rules, n_rules);
-  // fprintf(stderr, "cleaning up\n");
+  }
+  
+  pa->a = create_explicit_automaton(n_states, n_symb, c_rules, n_rules); 
   clean_several(n_to_clean, to_clean);
-  // fprintf(stderr, "building indices\n");
   build_td_index_from_explicit(pa->a);
   build_bu_index_from_explicit(pa->a);
   return (PyObject *)pa;  

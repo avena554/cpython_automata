@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include "avl/avl.h"
 
+
+/***************************************************
+ * Dictionaries allocation & key comparison params *
+ ***************************************************/
+
 const struct item_type_parameters PARENT_MAP_P = {
   &int_cmp_fn,
   NULL,
@@ -24,12 +29,23 @@ const struct item_type_parameters LABEL_MAP_P = {
   &dict_destroy
 };
 
-const struct item_type_parameters RULE_SET_P = {
+const struct item_type_parameters RULESET_P = {
   &int_cmp_fn,
   NULL,
   NULL
 };
 
+/************************************************
+ * Concrete extensions of abstract header types *
+ ************************************************/
+
+/*
+ * data structures for explicit automata
+ */
+
+/* 
+ * explicit automaton 
+ */
 typedef struct explicit_automaton *explicit_automaton;
 struct explicit_automaton{
   struct automaton head;
@@ -40,43 +56,95 @@ struct explicit_automaton{
   void *bu_index;
 };
 
+/*
+ * iterator over all rules
+ */
 typedef struct explicit_all_rules_iterator *explicit_all_rules_iterator;
 struct explicit_all_rules_iterator{
-  struct rule_iterator head;
+  int_iterator_hd head;
   int n_rules;
   int current_rule;
 };
 
+/*
+ * ruleset containing all rules
+ */
 typedef struct explicit_all_rules_ruleset *explicit_all_rules_ruleset;
 struct explicit_all_rules_ruleset{
-  struct ruleset head;
+  intset_hd head;
   int n_rules;
 };
 
-typedef struct explicit_rule_iterator *explicit_rule_iterator;
-struct explicit_rule_iterator{
-  struct rule_iterator head;
+/*
+ * common base type for iterators running over a dictionnary's (integer) keys
+ */
+typedef struct int_keyset_iterator *int_keyset_iterator;
+struct int_keyset_iterator{
+  int_iterator_hd head;
   dict_iterator d_it;
 };
 
-typedef struct explicit_ruleset *explicit_ruleset;
-struct explicit_ruleset{
-  struct ruleset head;
+/*
+ * common base type for set of integers stored as dictionary keys
+ */
+typedef struct int_keyset *int_keyset;
+struct int_keyset{
+  intset_hd head;
   void *map;
 };
 
+/*
+ * result of an intermediate td or by query (with no label provided)
+ */
 typedef struct explicit_label_to_ruleset *explicit_label_to_ruleset;
 struct explicit_label_to_ruleset{
   struct label_to_ruleset head;
   void *map;
 };
 
-void print_int_array(int *array, int width);
+/*
+ * data for an iterator traversing every rules in every of the nested rulesets of the result of a td or bu query 
+ * i.e. successively queries a label_to_ruleset for every label and traverse every rule of the returned ruleset 
+ */
+typedef struct flat_ruleset_iterator *flat_ruleset_iterator;
+struct flat_ruleset_iterator{
+  int_iterator_hd head;
+  label_to_ruleset lmap;
+  intset outer_keyset;
+  int_iterator outer_keys;
+  ruleset current_ruleset;
+  rule_iterator current_iterator;
+};
 
+
+/*************
+ * Utilities *
+ **************/
+
+/*
+ * debug utility
+ */
+void print_int_array(int *array, int width){
+  fprintf(stderr, "[");
+  for(int j = 0; j < width; ++j){
+    fprintf(stderr, "%d", array[j]);
+    if(j < width - 1){
+      fprintf(stderr, ", ");
+    }
+  }
+  fprintf(stderr, "]\n");
+}
+
+/*
+ * gives the space necessary to store one rule (in sizeof(int) units)
+ */
 int explicit_rule_storage_size(int max_width){
   return max_width + 4;
 }
 
+/*
+ * find the maximum width of the table of rules provided as argument
+ */
 int max_rule_width(struct rule *rules, int n_rules){
   int max_w = 0;
   int current_w;
@@ -89,40 +157,8 @@ int max_rule_width(struct rule *rules, int n_rules){
   return max_w;
 }
 
-void explicit_rule_iterator_destroy(rule_iterator it){
-  explicit_rule_iterator e_it = (explicit_rule_iterator)it;
-  if(e_it->d_it != NULL){
-    e_it->d_it->destroy(e_it->d_it);
-  }
-  free(e_it);
-}
-
-int *explicit_rule_iterator_next(rule_iterator it){
-  int *next_rule = NULL;
-  dict_iterator d_it = ((explicit_rule_iterator)it)->d_it;
-  if(d_it != NULL){
-    dict_item next = d_it->next(d_it);    
-    if (next != NULL){
-      next_rule = next->key;
-    }
-  }
-  return next_rule;
-}
-
-rule_iterator explicit_rule_iterator_create(const ruleset rs){
-  dict_iterator d_it = NULL;
-  explicit_ruleset e_rs = (explicit_ruleset)rs;
-  explicit_rule_iterator wrapped_it = malloc(sizeof(struct explicit_rule_iterator));
-  if(e_rs->map != NULL){
-    d_it = dict_items(e_rs->map);
-  }
-  wrapped_it->d_it = d_it;
-  wrapped_it->head.destroy = &explicit_rule_iterator_destroy;
-  wrapped_it->head.next = &explicit_rule_iterator_next;
-  return (rule_iterator)wrapped_it;
-}
-
-/* just wrap a call to get_item to allow the argument dictionary to be a NULL pointer
+/*
+ * just wraps a call to get_item to allow the argument dictionary to be a NULL pointer
  * returns NULL if that's the case
  */
 void *wrap_get_item(void *map, void *key){
@@ -134,29 +170,209 @@ void *wrap_get_item(void *map, void *key){
   }
 }
 
-void explicit_ruleset_destroy(ruleset wrapped_map){
-  free(wrapped_map);
+/*
+ * comparison function for the bu index 
+ * (compares int tuple -- children states of different rules)
+ */
+int children_cmp_fn(const void *k1, const void *k2){
+  
+  int *actual_k1 = (int *)k1;
+  int *actual_k2 = (int *)k2;
+ 
+  int cmp = 0;
+  int s1 = actual_k1[0];
+  int s2 = actual_k2[0];
+  int size=s1;
+  if(s1 > s2){
+    size = s2;
+  }
+  
+  for(int index = 1; index <= size; ++index){
+    cmp = int_cmp_fn(actual_k1 + index, actual_k2 + index);
+    if(cmp != 0){
+      return cmp;
+    }
+  }
+  return s1 - s2;
 }
 
+/*
+ * for querying dictionaries of dictionaries
+ * will create, and store a new nested dictionary under 'key'
+ * if the top-level dictionary does not contains an entry for 'key'
+ */
+void *get_or_create(void *d, void *key, const struct item_type_parameters *nested_dict_params){
+  void *nested_dict = get_item(d, key);
+  if(nested_dict == NULL){
+    nested_dict = dict_create(nested_dict_params);
+    set_item(d, key, nested_dict);
+  }
+  return nested_dict;
+}
+
+/*
+ * intialize a rule with relevant attributes
+ */
+void init_rule(int parent, int label, int *children, int width, struct rule *target){
+  struct rule r = {
+    parent,
+    label,
+    children,
+    width
+  };
+  *target = r;
+}
+
+
+/************************************
+ * Explicit automata implementation *
+ *************************************/
+
+/*
+ * int_keyset_iterator implementation
+ */
+
+void int_keyset_iterator_destroy(int_iterator it){
+  int_keyset_iterator c_it = (int_keyset_iterator)it;
+  if(c_it->d_it != NULL){
+    c_it->d_it->destroy(c_it->d_it);
+  }
+  free(c_it);
+}
+
+int *int_keyset_iterator_next(int_iterator it){
+  int *next_value = NULL;
+  dict_iterator d_it = ((int_keyset_iterator)it)->d_it;
+  if(d_it != NULL){
+    dict_item next = d_it->next(d_it);    
+    if(next != NULL){
+      next_value = next->key;
+    }
+  }
+  return next_value;
+}
+
+int_iterator int_keyset_iterator_create(const intset s){
+  dict_iterator d_it = NULL;
+  int_keyset c_s = (int_keyset)s;
+  int_keyset_iterator wrapped_it = malloc(sizeof(struct int_keyset_iterator));
+  if(c_s->map != NULL){
+    d_it = dict_items(c_s->map);
+  }
+  wrapped_it->d_it = d_it;
+  wrapped_it->head.destroy = &int_keyset_iterator_destroy;
+  wrapped_it->head.next = &int_keyset_iterator_next;
+  return (int_iterator)wrapped_it;
+}
+
+/*
+ * int_keyset implementation
+ */
+
+void int_keyset_destroy(intset s){
+  free(s);
+}
+
+/*
+ * build an int_keyset from an underlying map (with int * keys).
+ */
+int_keyset int_keyset_from_map(void *map){
+  int_keyset w_map = malloc(sizeof(struct int_keyset));
+  w_map->map = map;
+  w_map->head.create_iterator = &int_keyset_iterator_create;
+  w_map->head.destroy = &int_keyset_destroy;
+  return w_map;
+}
+
+
+/*
+ * implementation of a ruleset containing all rules of a td or bu query (label_to_ruleset)
+ */
+
+void flat_ruleset_iterator_destroy(int_iterator it){
+  flat_ruleset_iterator c_it = (flat_ruleset_iterator)it;
+  c_it->outer_keyset->destroy(c_it->outer_keyset);
+  c_it->outer_keys->destroy(c_it->outer_keys);
+  if(c_it->current_ruleset != NULL){
+    c_it->current_iterator->destroy(c_it->current_iterator);
+    c_it->current_ruleset->destroy(c_it->current_ruleset);
+  }
+  free(c_it);  
+}
+
+int *flat_ruleset_iterator_next(int_iterator it){
+  int *next_value = NULL;
+  flat_ruleset_iterator c_it = (flat_ruleset_iterator)it;
+  
+  if(c_it->current_ruleset != NULL){
+    next_value = c_it->current_iterator->next(c_it->current_iterator);
+  }
+
+  while(next_value == NULL){
+    int *next_key = c_it->outer_keys->next(c_it->outer_keys);
+    if(next_key == NULL){
+      return NULL;
+    }
+    if(c_it->current_ruleset != NULL){
+      c_it->current_iterator->destroy(c_it->current_iterator);
+      c_it->current_ruleset->destroy(c_it->current_ruleset);
+    }
+    c_it->current_ruleset = c_it->lmap->query(c_it->lmap, *next_key);
+    c_it->current_iterator = c_it->current_ruleset->create_iterator(c_it->current_ruleset);
+    next_value = c_it->current_iterator->next(c_it->current_iterator);
+  }
+  return next_value;
+}
+
+void flat_ruleset_iterator_init(label_to_ruleset lmap, intset outer_keyset, flat_ruleset_iterator it){
+  it->lmap = lmap;
+  it->outer_keyset = outer_keyset;
+  it->outer_keys = outer_keyset->create_iterator(outer_keyset);
+  it->current_ruleset = NULL;
+  it->current_iterator = NULL;
+  it->head.next = &flat_ruleset_iterator_next;
+  it->head.destroy = &flat_ruleset_iterator_destroy;
+}
+
+
+/*
+ * td and bu queries' result implementation (label_to_ruleset)
+ */
+
+/*
+ * queries for a given label
+ */
 ruleset explicit_label_to_ruleset_query(const label_to_ruleset wrapped_map, int label){
   explicit_label_to_ruleset w_outer_map = (explicit_label_to_ruleset)wrapped_map;
-  explicit_ruleset w_inner_map = malloc(sizeof(struct explicit_ruleset));
   void *inner_map = wrap_get_item(w_outer_map->map, &label);
-  w_inner_map->map = inner_map;
-  w_inner_map->head.create_iterator = &explicit_rule_iterator_create;
-  w_inner_map->head.destroy = &explicit_ruleset_destroy;
-  return (ruleset)w_inner_map;
+  return (ruleset)int_keyset_from_map(inner_map);
 }
 
 void explicit_label_to_ruleset_destroy(label_to_ruleset wrapped_map){
   free(wrapped_map);
 }
 
+intset explicit_label_to_ruleset_labels(const label_to_ruleset lmap){
+  return (intset)int_keyset_from_map(((explicit_label_to_ruleset)lmap)->map);
+}
+
+rule_iterator explicit_label_to_ruleset_all_rules(const label_to_ruleset lmap){
+  flat_ruleset_iterator it = malloc(sizeof(struct flat_ruleset_iterator));
+  flat_ruleset_iterator_init(lmap, lmap->labels(lmap), it);
+  return (rule_iterator)it;
+}
+
 void explicit_label_to_ruleset_init(explicit_label_to_ruleset target, void *map){
   target->map = map;
   target->head.query = &explicit_label_to_ruleset_query;
+  target->head.labels = &explicit_label_to_ruleset_labels;
+  target->head.all_rules = &explicit_label_to_ruleset_all_rules;
   target->head.destroy = &explicit_label_to_ruleset_destroy;
 }
+
+/*
+ * td and bu queries
+ */
 
 label_to_ruleset explicit_td_query(const automaton a, int parent_state){
   explicit_automaton explicit = (explicit_automaton)a;
@@ -178,6 +394,10 @@ label_to_ruleset explicit_bu_query(const automaton a, int *children, int width){
   return (label_to_ruleset)wrapped_map;
 }
 
+
+/*
+ * decode a rule from the explicit automaton's storage
+ */
 void explicit_set_rule_from_row(int *row, struct rule *target){
   target->parent = row[1];
   target->label = row[2];
@@ -185,12 +405,20 @@ void explicit_set_rule_from_row(int *row, struct rule *target){
   target->children = row + 4;
 }
 
+/*
+ * retieve a rule with given index from an explicit automaton a
+ */
 void explicit_fill_rule(const automaton a, struct rule *target, int rule_index){
   explicit_automaton explicit = (explicit_automaton)a;
   int s_size = explicit_rule_storage_size(explicit->max_w);
   int *row = explicit->rules_mat + rule_index * s_size;
   explicit_set_rule_from_row(row, target);
 }
+
+
+/*
+ * implementation of an iterator over all rules in the automaton
+ */
 
 void explicit_all_rules_iterator_destroy(rule_iterator it){
   free(it);
@@ -210,10 +438,15 @@ rule_iterator explicit_all_rules_iterator_create(ruleset rs){
   explicit_all_rules_iterator it = malloc(sizeof(struct explicit_all_rules_iterator));
   it->n_rules = ((explicit_all_rules_ruleset) rs)->n_rules;
   it->current_rule = -1;
-  it->head.next=explicit_all_rules_iterator_next;
-  it->head.destroy=&explicit_all_rules_iterator_destroy;
+  it->head.next = explicit_all_rules_iterator_next;
+  it->head.destroy = &explicit_all_rules_iterator_destroy;
   return (rule_iterator)it;
 }
+
+
+/*
+ * implementation of a ruleset containing all rules of an automaton
+ */
 
 void explicit_all_rules_ruleset_destroy(ruleset rs){
   free(rs);
@@ -227,6 +460,13 @@ ruleset explicit_all_rules(const automaton a){
   return (ruleset)rs;
 }
 
+/*
+ * implementation of an explicit automaton
+ */
+
+/*
+ * deallocate automaton
+ */
 void explicit_destroy(automaton a){
   explicit_automaton explicit = (explicit_automaton)a;
   dict_destroy(explicit->td_index);
@@ -235,6 +475,9 @@ void explicit_destroy(automaton a){
   free(explicit);
 }
 
+/*
+ * allocate automaton and initialize rules but do not build td and bu indexes.
+ */
 automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules, int n_rules){
   int max_w = max_rule_width(rules, n_rules);
   int s_size = explicit_rule_storage_size(max_w);
@@ -248,7 +491,9 @@ automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules
   for(int r = 0; r < n_rules; ++r){
     current_rule = rules + r;
     row = rules_mat + r*s_size;
-    // store the rule index as its name
+    /*
+ * store the rule index as its name
+ */
     row[0] = r;
     row[1] = current_rule->parent;
     row[2] = current_rule->label;
@@ -277,14 +522,10 @@ automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules
   return (automaton)a;
 }
 
-void *get_or_create(void *d, void *key, const struct item_type_parameters *nested_dict_params){
-  void *nested_dict = get_item(d, key);
-  if(nested_dict == NULL){
-    nested_dict = dict_create(nested_dict_params);
-    set_item(d, key, nested_dict);
-  }
-  return nested_dict;
-}
+
+/* 
+ * functions for initializing the td and bu indexes, respectively
+ */
 
 void build_td_index_from_explicit(const automaton a){
   explicit_automaton explicit = (explicit_automaton)a;
@@ -295,7 +536,7 @@ void build_td_index_from_explicit(const automaton a){
     int *parent = rule + 1;
     int *label = rule + 2;
     void *l_to_rs = get_or_create(explicit->td_index, parent, &LABEL_MAP_P);
-    void *rs = get_or_create(l_to_rs, label, &RULE_SET_P);
+    void *rs = get_or_create(l_to_rs, label, &RULESET_P);
     set_item(rs, rule, NULL);
   }
 }
@@ -309,50 +550,23 @@ void build_bu_index_from_explicit(const automaton a){
     int *label = rule + 2;
     int *width_and_children = rule + 3;
     void *l_to_rs = get_or_create(explicit->bu_index, width_and_children, &LABEL_MAP_P);
-    void *rs = get_or_create(l_to_rs, label, &RULE_SET_P);
+    void *rs = get_or_create(l_to_rs, label, &RULESET_P);
     set_item(rs, rule, NULL);
   }
 }
 
-int children_cmp_fn(const void *k1, const void *k2){
-  
-  int *actual_k1 = (int *)k1;
-  int *actual_k2 = (int *)k2;
- 
-  int cmp = 0;
-  int s1 = actual_k1[0];
-  int s2 = actual_k2[0];
-  int size=s1;
-  if(s1 > s2){
-    size = s2;
-  }
-  
-  for(int index = 1; index <= size; ++index){
-    cmp = int_cmp_fn(actual_k1 + index, actual_k2 + index);
-    if(cmp != 0){
-      return cmp;
+/*
+ * intersects two explicit automata
+ * the automata are assumed to share a common vocabulary
+ */
+/*
+automaton intersect(automaton a1, automaton a2){
+  for(int s1 = 0; s1 < a1->n_states; ++s1){
+    for(int s2 = 0; s2 < a2->n_sates; ++s2){
+      0;
     }
   }
-  return s1 - s2;
+  return NULL;
 }
+*/
 
-void init_rule(int parent, int label, int *children, int width, struct rule *target){
-  struct rule r = {
-    parent,
-    label,
-    children,
-    width
-  };
-  *target = r;
-}
-
-void print_int_array(int *array, int width){
-  fprintf(stderr, "[");
-  for(int j = 0; j < width; ++j){
-    fprintf(stderr, "%d", array[j]);
-    if(j < width - 1){
-      fprintf(stderr, ", ");
-    }
-  }
-  fprintf(stderr, "]\n");
-}

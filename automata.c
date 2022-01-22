@@ -555,18 +555,27 @@ void build_bu_index_from_explicit(const automaton a){
   }
 }
 
+
+/*******************************************/
+/* functions using (or producing) automata */
+/*******************************************/
+
+
+/*
+ * count how many rules there 
+ */
+
+
 /*
  * intersects two explicit automata
  * the automata are assumed to share a common vocabulary
  */
-/*
 automaton intersect(automaton a1, automaton a2){
   for(int s1 = 0; s1 < a1->n_states; ++s1){
-    for(int s2 = 0; s2 < a2->n_sates; ++s2){
-      0;
-    }
+    label_to_ruleset lmap1 = a1->query()
+    
   }
   return NULL;
 }
-*/
+
 

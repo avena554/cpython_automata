@@ -6,17 +6,17 @@ automaton make_test(){
   int c2[2] = {1, 2};
   int c3[2] = {0};
   struct rule r1 = {
-    0, 0, c1, 3
+    .parent = 0, .label = 0, .width = 3, .children = c1
   };
   struct rule r2 = {
-    1, 1, c2, 2
+    .parent = 1, .label = 1, .width = 2, .children = c2
   };
   struct rule r3 = {
-    0, 0, c3, 1
+    .parent =  0, .label = 0, .width = 1, .children = c3
   };
 
   struct rule rs[3] = {r1, r2, r3};
-  automaton a = create_explicit_automaton(3, 2, rs, 3);
+  automaton a = create_explicit_automaton(3, 2, rs, 3, 0);
   return a;
 }
 

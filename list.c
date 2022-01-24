@@ -1,11 +1,11 @@
 #include "list.h"
 #include <stdlib.h>
 
-ll_cell first(llist l){  
+ll_cell llist_first(llist l){  
   return l->sentinelle->next;
 }
 
-ll_cell last(llist l){
+ll_cell llist_last(llist l){
   return l->sentinelle->prev;
 }
 
@@ -22,23 +22,25 @@ static void remove_cell(ll_cell c){
   destroy_cell(c);
 }
 
-void remove_first(llist l){
-  remove_cell(first(l));
+void llist_remove_first(llist l){
+  remove_cell(llist_first(l));
+  --l->size;
 }
 
-void remove_last(llist l){
-  remove_cell(last(l));
+void llist_remove_last(llist l){
+  remove_cell(llist_last(l));
+  --l->size;
 }
 
-void *popleft(llist l){
-  void *elem = first(l)->elem;
-  remove_first(l);
+void *llist_popleft(llist l){
+  void *elem = llist_first(l)->elem;
+  llist_remove_first(l);
   return elem;
 }
 
-void *popright(llist l){
-  void *elem = last(l)->elem;
-  remove_last(l);
+void *llist_popright(llist l){
+  void *elem = llist_last(l)->elem;
+  llist_remove_last(l);
   return elem;
 }
 
@@ -56,25 +58,27 @@ static void insert_cell_right(ll_cell cell_before, ll_cell new_cell){
   cell_before->next = new_cell;
 }
 
-void insert_left(llist l, void *elem){
+void llist_insert_left(llist l, void *elem){
   ll_cell new_cell = malloc(sizeof(struct ll_cell));
   new_cell->elem = elem;
   insert_cell_right(l->sentinelle, new_cell);
+  ++l->size;
 }
 
-void insert_right(llist l, void *elem){
+void llist_insert_right(llist l, void *elem){
   ll_cell new_cell = malloc(sizeof(struct ll_cell));
   new_cell->elem = elem;
   insert_cell_left(l->sentinelle, new_cell);
+  ++l->size;
 }
 
-int is_empty(llist l){
+int llist_is_empty(llist l){
   return l->sentinelle->next == l->sentinelle;
 }
 
 void llist_destroy(llist l, void (*dispose_of)(void *elem)){
-  while(!is_empty(l)){
-    void *elem = popleft(l);
+  while(!llist_is_empty(l)){
+    void *elem = llist_popleft(l);
     if(dispose_of != NULL){
       dispose_of(elem);
     }
@@ -82,9 +86,10 @@ void llist_destroy(llist l, void (*dispose_of)(void *elem)){
   destroy_cell(l->sentinelle);
 }
 
-void epsilon_init(llist l){
+void llist_epsilon_init(llist l){
   l->sentinelle = malloc(sizeof(struct ll_cell));
   l->sentinelle->elem = NULL;
   l->sentinelle->next = l->sentinelle;
   l->sentinelle->prev = l->sentinelle;
+  l->size = 0;
 }

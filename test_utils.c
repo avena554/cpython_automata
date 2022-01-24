@@ -13,7 +13,7 @@ int main(void){
   
   const int *data[] = {e1, e2, e3};
 
-  int indices[4];
+  int indices[3];
   int str[3];
 
   struct ci_state state;

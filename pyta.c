@@ -214,8 +214,9 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
   PyObject *rules;
   int n_states;
   int n_symb;
+  int final;
   
-  if(!PyArg_ParseTuple(args, "iiO", &n_states, &n_symb, &rules) || !PySequence_Check(rules)) return NULL;
+  if(!PyArg_ParseTuple(args, "iiOi", &n_states, &n_symb, &rules, &final) || !PySequence_Check(rules)) return NULL;
 
   Py_ssize_t n_rules = PySequence_Size(rules);
   if(n_rules < 0) return NULL;
@@ -345,7 +346,7 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
     return NULL;
   }
   
-  pa->a = create_explicit_automaton(n_states, n_symb, c_rules, n_rules); 
+  pa->a = create_explicit_automaton(n_states, n_symb, c_rules, n_rules, final); 
   clean_several(n_to_clean, to_clean);
   build_td_index_from_explicit(pa->a);
   build_bu_index_from_explicit(pa->a);

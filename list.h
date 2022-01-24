@@ -15,22 +15,23 @@ struct ll_cell{
  * unless a disposer function to this effect is provided
  */
 typedef struct llist *llist;
-struct llist{  
+struct llist{
+  long size;
   ll_cell sentinelle;
 };
 
-ll_cell first(llist); //defined only for non empty list
-ll_cell last(llist);  //defined only for non empty list
-void remove_first(llist); //defined only for non empty list
-void remove_last(llist);  //defined only for non empty list
-void *popleft(llist); //defined only for non empty list
-void *popright(llist); //defined only for non empty list  
-void insert_left(llist, void *); 
-void insert_right(llist, void *);
-int is_empty(llist);
+ll_cell llist_first(llist); //defined only for non empty list
+ll_cell llist_last(llist);  //defined only for non empty list
+void llist_remove_first(llist); //defined only for non empty list
+void llist_remove_last(llist);  //defined only for non empty list
+void *llist_popleft(llist); //defined only for non empty list
+void *llist_popright(llist); //defined only for non empty list  
+void llist_insert_left(llist, void *); 
+void llist_insert_right(llist, void *);
+int llist_is_empty(llist);
 void llist_destroy(llist, void (*dispose_of)(void *elem)); //dispose ignored if NULL
 
 
-void epsilon_init(llist);
+void llist_epsilon_init(llist);
 
 #endif

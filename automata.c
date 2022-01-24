@@ -2,6 +2,8 @@
 #include "dict.h"
 #include <string.h>
 #include <stdlib.h>
+#include "list.h"
+#include "utils.h"
 //debug
 #include <stdio.h>
 #include "avl/avl.h"
@@ -148,7 +150,7 @@ int explicit_rule_storage_size(int max_width){
 int max_rule_width(struct rule *rules, int n_rules){
   int max_w = 0;
   int current_w;
-  for(int i = 0; i < n_rules; ++i){
+  for(int i = 0; i < n_rules; ++i){    
     current_w = rules[i].width; 
     if(current_w >= max_w){
       max_w = current_w;
@@ -215,10 +217,10 @@ void *get_or_create(void *d, void *key, const struct item_type_parameters *neste
  */
 void init_rule(int parent, int label, int *children, int width, struct rule *target){
   struct rule r = {
-    parent,
-    label,
-    children,
-    width
+    .parent = parent,
+    .label = label,
+    .width = width,
+    .children = children,
   };
   *target = r;
 }
@@ -478,8 +480,8 @@ void explicit_destroy(automaton a){
 /*
  * allocate automaton and initialize rules but do not build td and bu indexes.
  */
-automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules, int n_rules){
-  int max_w = max_rule_width(rules, n_rules);
+automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules, int n_rules, int final){
+  int max_w = max_rule_width(rules, n_rules);  
   int s_size = explicit_rule_storage_size(max_w);
   int *rules_mat = malloc(n_rules * s_size * sizeof(int));
   struct rule *current_rule  = NULL;
@@ -518,6 +520,7 @@ automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules
   a->head.n_states = n_states;
   a->head.n_symb = n_symb;
   a->head.n_rules = n_rules;
+  a->head.final = final;
 
   return (automaton)a;
 }
@@ -561,21 +564,441 @@ void build_bu_index_from_explicit(const automaton a){
 /*******************************************/
 
 
+struct agenda_item{
+  int state;
+  int children_expanded;
+  label_to_ruleset td_resp;
+};
+
+struct pairing_entry{
+  int *lhs;
+  label_to_ruleset bu_resp;
+};
+
 /*
- * count how many rules there 
+ * auxiliary needed for intersect
  */
+void list_elem_destroy(void *elem){
+  llist_destroy((llist)elem, NULL);
+  free(elem);
+}
 
+void pe_destroy(void *elem){
+  struct pairing_entry *pe = (struct pairing_entry *)elem;
+  free(pe->lhs);
+  pe->bu_resp->destroy(pe->bu_resp);
+  free(pe);
+}
+
+void list_pe_destroy(void *elem){
+  llist_destroy((llist)elem, &pe_destroy);
+  free(elem);
+}
+
+void rule_destroy(void *elem){
+  struct rule *rule = (struct rule *)elem;
+  free(rule->children);
+  free(rule);
+}
+
+int index_pair_cmp_fn(const void *k1, const void *k2){
+  struct index_pair *v1 = (struct index_pair *)k1;
+  struct index_pair *v2 = (struct index_pair *)k2;
+
+  if(v1->first < v2->first){
+    return -1;
+  }else{
+    if(v1->first > v2->first){
+      return 1;
+    }else{
+      return int_cmp_fn(&(v1->second), &(v2->second));
+    }
+  }
+}
+
+const struct item_type_parameters state_pairing_params = {
+  .key_cmp_fn = &int_cmp_fn,
+  .key_delete_fn = NULL,
+  .elem_delete_fn = &list_elem_destroy
+};
+const struct item_type_parameters children_pairing_params = {
+  .key_cmp_fn = &children_cmp_fn,
+  .key_delete_fn = &free,
+    .elem_delete_fn = &list_pe_destroy
+};
+const struct item_type_parameters product_remap_params = {
+  .key_cmp_fn = &index_pair_cmp_fn,
+    .key_delete_fn = NULL,
+    .elem_delete_fn = NULL
+};
+const struct item_type_parameters reverse_remap_params = {
+  .key_cmp_fn = &int_cmp_fn,
+  .key_delete_fn = &free,
+  .elem_delete_fn = &free
+};
 
 /*
+ * TODO: CUT THIS NONSENSE INTO PIECES !
  * intersects two explicit automata
  * the automata are assumed to share a common vocabulary
  */
-automaton intersect(automaton a1, automaton a2){
-  for(int s1 = 0; s1 < a1->n_states; ++s1){
-    label_to_ruleset lmap1 = a1->query()
+void intersect_cky(const automaton a1, const automaton a2, struct intersection *target){
+
+  struct llist agenda;
     
+  void *state_pairs = dict_create(&state_pairing_params);
+  int *states1 = malloc(a1->n_states * sizeof(int));
+  int *states2 = malloc(a2->n_states * sizeof(int));
+
+  // list of rules for the intersection automaton
+  struct llist product_rules;
+  llist_epsilon_init(&product_rules);
+  
+  // remapping from product states to new indices
+  int n_pstates = 0;
+  void *ps_remap = dict_create(&product_remap_params);
+  void *reverse_ps = dict_create(&reverse_remap_params);
+  // map from product rules to old rules
+  int n_pr = 0;
+  void *reverse_pr = dict_create(&reverse_remap_params);
+
+  // prep states values in memory
+  for(int s = 0 ; s < a1->n_states ; ++s) states1[s] = s;
+  for(int s = 0 ; s < a2->n_states ; ++s) states2[s] = s;  
+  
+  llist_epsilon_init(&agenda);
+  struct agenda_item *start = malloc(sizeof(struct agenda_item));
+  start->state = a2->final;
+  start->children_expanded = 0;
+  start->td_resp = NULL;
+  llist_insert_left(&agenda, start);
+
+  while(!llist_is_empty(&agenda)){
+    fprintf(stderr, "popping next rhs state\n");
+    struct agenda_item *item = (struct agenda_item *)llist_popleft(&agenda);
+
+    fprintf(stderr, "next rhs state is %d\n", item->state);
+
+    // check if state has been expanded already
+    if(get_item(state_pairs, &(item->state)) == NULL){
+      fprintf(stderr, "state has not been expanded\n");
+      if(!item->children_expanded){
+	fprintf(stderr, "\tchildren have not yet been expanded\n");
+
+	label_to_ruleset td_resp = a2->td_query(a2, item->state);
+	fprintf(stderr, "\ta2 has been queried for state %d\n", item->state);
+	
+	// Push parent state back for pairing after children are expanded
+	struct agenda_item *continuation = malloc(sizeof(struct agenda_item));
+	continuation->state = item->state;
+	continuation->children_expanded = 1;
+	continuation->td_resp = td_resp;
+	llist_insert_left(&agenda, continuation);
+	fprintf(stderr, "\tstate has been pushed back for resuming it's expansion after children's expansion\n");
+	
+	//Push all children states for expansion	
+	rule_iterator x_rules = td_resp->all_rules(td_resp);	
+	for(int *rule_index = x_rules->next(x_rules); rule_index != NULL; rule_index=x_rules->next(x_rules)){
+	  struct rule r;
+	  a2->fill_rule(a2, &r, *rule_index);
+	  fprintf(stderr, "\tfound rule with arity %d\n", r.width);
+	  for(int c_index = 0; c_index < r.width; ++c_index){
+	    struct agenda_item *child_item = malloc(sizeof(struct agenda_item));
+	    child_item->state = r.children[c_index];
+	    child_item->children_expanded = 0;
+	    child_item->td_resp = 0;
+	    fprintf(stderr, "\t\tpushing child %d\n", child_item->state);
+	    llist_insert_left(&agenda, child_item);
+	  }
+	}
+	x_rules->destroy(x_rules);
+	fprintf(stderr, "\tchildren have been pushed for expansion\n");
+		
+      }else{
+	fprintf(stderr, "\tchildren have already been expanded\n");
+	// init the list of pair states
+	llist target_pairs = malloc(sizeof(struct llist));
+	int *state_key = states2 + item->state;
+
+	//init the list of paired lhs states
+	llist_epsilon_init(target_pairs);
+	set_item(state_pairs, state_key, target_pairs);
+	
+	label_to_ruleset td_resp = item->td_resp;
+	void *children_pairing = dict_create(&children_pairing_params);
+
+	fprintf(stderr, "\tfinding all rhs children tuple\n");
+	// associate each children tuple with an empty list of children-pairing entries
+	rule_iterator x_rules = td_resp->all_rules(td_resp);
+	for(int *rule_index = x_rules->next(x_rules); rule_index != NULL; rule_index=x_rules->next(x_rules)){
+	  struct rule r;	  
+	  a2->fill_rule(a2, &r, *rule_index);
+	  // prep a dictionary key
+	  int *tuple_key = malloc((r.width  + 1) * sizeof(int));
+	  tuple_key[0] = r.width;
+	  memcpy(tuple_key + 1, r.children, r.width * sizeof(int));
+
+	  fprintf(stderr, "\t\tfound children tuple\n");
+	  print_int_array(tuple_key, r.width + 1);
+	  
+	  if(get_item(children_pairing, tuple_key) == NULL){
+	    fprintf(stderr, "\t\t\tchildren tuple is seen for first time\n");
+	    llist associated_pairs = malloc(sizeof(struct llist));
+	    llist_epsilon_init(associated_pairs);
+	    set_item(children_pairing, tuple_key, associated_pairs);
+	  }
+	}
+	x_rules->destroy(x_rules);
+	
+	fprintf(stderr, "\tfinding all lhs children tuples\n");
+	// fill the list of pairs for every children tuple
+	dict_iterator lhs_tuples = dict_items(children_pairing);
+	for(dict_item di = lhs_tuples->next(lhs_tuples); di != NULL; di = lhs_tuples->next(lhs_tuples)){
+	  int *indices;
+	  int *out;
+	  int width = ((int *)di->key)[0];
+	  int *rhs = ((int *)di->key) + 1;
+
+	  fprintf(stderr, "\trhs is: \n");
+	  print_int_array(rhs, width);
+
+	  if(width > 0){
+	    const int **candidates = malloc(width * sizeof(int *));
+	    int *n_pairs = malloc(width  * sizeof(int));
+	    // for each lhs state, find allowed pairs
+	    for(int index = 0; index < width; ++index){
+	      fprintf(stderr, "\t\tcandidates for child %d\n", rhs[index]);
+	      llist allowed_pairs = (llist)get_item(state_pairs, rhs + index);
+	      n_pairs[index] = allowed_pairs->size;
+	      fprintf(stderr, "\t\tthere are %d candidates\n", n_pairs[index]);
+	      // convert the list to an array
+	      int *candidates_index = malloc(allowed_pairs->size * sizeof(int));
+	      if(!llist_is_empty(allowed_pairs)){
+		int k = 0;
+		for(ll_cell c = llist_first(allowed_pairs); c != allowed_pairs->sentinelle; c = c->next){		
+		  candidates_index[k] = *((int *)(c->elem)); 
+		  ++k;
+		}
+	      }
+	      candidates[index] = candidates_index;
+	      fprintf(stderr, "\t\tcandidates @ %d :\n", index);
+	      print_int_array(candidates[index], n_pairs[index]);
+	    }
+	    fprintf(stderr, "\tcartesian iterator\n");
+	    // use cartesian iterator to range over all rhs pair tuples
+	    struct ci_state lhs_it;
+	    indices = malloc(width * sizeof(int));
+	    out = malloc(width * sizeof(int));
+	    ci_init(candidates, n_pairs, width, indices, out, &lhs_it);
+	    //fprintf(stderr, "\titerator is initialized\n");
+	    
+	    for(int *tuple = ci_next(&lhs_it); tuple != NULL; tuple = ci_next(&lhs_it)){
+	      // allocate a new array that will survive outside current scope.
+	      
+	      int *lhs = malloc(width * sizeof(int));
+	      // copy the rhs tuple to the new array
+	      memcpy(lhs, tuple, width * sizeof(int));
+	      fprintf(stderr, "\t\tlhs tuple:\n");
+	      print_int_array(lhs, width);
+	      // make a bu query
+	      label_to_ruleset bu_resp = a1->bu_query(a1, lhs, width);
+	      fprintf(stderr, "\t\tbu_query has been made:\n");
+	     
+	      // allocate a pairing entry that will be used as key.
+	      struct pairing_entry *pe = malloc(sizeof(struct pairing_entry));
+	      pe->lhs = lhs;
+	      pe->bu_resp = bu_resp;
+
+	      // store in the list
+	      fprintf(stderr, "\t\tstoring in list:\n");
+	      llist_insert_right((llist)(di->elem), pe);	      	      
+	    }
+	    // clean temp ressources allocated for cartesian iteration
+	    fprintf(stderr, "\tcleaning up iterator:\n");
+	    free(n_pairs);
+	    free(indices);
+	    free(out);
+	    for(int index = 0; index < width; ++index) free((int *)candidates[index]);
+	    free(candidates);
+	    fprintf(stderr, "\titerator cleaned.\n");
+	  }else{
+	    fprintf(stderr, "terminal rule case\n");
+	    label_to_ruleset bu_resp = a1->bu_query(a1, NULL, width);
+	    fprintf(stderr, "\t\tbu_query has been made:\n");
+	    struct pairing_entry *pe = malloc(sizeof(struct pairing_entry));
+	    pe->lhs = NULL;
+	    pe->bu_resp = bu_resp;
+
+	    // store in the list
+	    fprintf(stderr, "\t\tstoring in list:\n");
+	    llist_insert_right((llist)(di->elem), pe);
+	  }
+	}
+	lhs_tuples->destroy(lhs_tuples);
+
+	fprintf(stderr, "\tbuilding product rules\n");
+	x_rules = td_resp->all_rules(td_resp);
+	for(int *rhs_index = x_rules->next(x_rules); rhs_index != NULL; rhs_index=x_rules->next(x_rules)){
+	  struct rule rhs_rule;	  
+	  a2->fill_rule(a2, &rhs_rule, *rhs_index);
+	  // get the list of pairing entries for the 
+	  
+	  // prep a dictionary key
+	  int *tuple_key = malloc((rhs_rule.width + 1) * sizeof(int));
+	  tuple_key[0] = rhs_rule.width;
+	  memcpy(tuple_key + 1, rhs_rule.children, rhs_rule.width * sizeof(int));
+
+	  fprintf(stderr, "\t\trhs width and children:\n");
+	  print_int_array(tuple_key, rhs_rule.width + 1);
+	  
+	  llist pes = get_item(children_pairing, tuple_key);
+	  free(tuple_key);
+
+	  fprintf(stderr, "\t\tentries queried\n");
+	  
+	  // loop over all pes
+	  if(!llist_is_empty(pes)){
+	    fprintf(stderr, "\t\tthere are entries:\n");
+	    for(ll_cell c = llist_first(pes); c != pes->sentinelle; c = c->next){		
+	      struct pairing_entry *pe = (struct pairing_entry *)(c->elem);
+	      fprintf(stderr, "\t\tlhs children\n");
+	      print_int_array(pe->lhs, rhs_rule.width);
+		
+	      fprintf(stderr, "\t\tquerying for label %d:\n", rhs_rule.label);
+	      ruleset lhs_rules = pe->bu_resp->query(pe->bu_resp, rhs_rule.label);
+	      fprintf(stderr, "\t\tdone, iterating over lhs rules\n");
+	      rule_iterator lhs_it = lhs_rules->create_iterator(lhs_rules);
+	      for(int *lhs_index = lhs_it->next(lhs_it); lhs_index != NULL; lhs_index = lhs_it->next(lhs_it)){
+		struct rule lhs_rule;
+		a1->fill_rule(a1, &lhs_rule, *lhs_index);
+		fprintf(stderr, "\t\t\tlhs parent:  %d\n", lhs_rule.parent);
+
+		// remap the parent product state
+		fprintf(stderr, "\t\t\tremaping (%d, %d)\n", lhs_rule.parent, rhs_rule.parent);
+		struct index_pair *product_parent = malloc(sizeof(struct index_pair));
+		product_parent->first = lhs_rule.parent;
+		product_parent->second = rhs_rule.parent;
+		int *remapped_index =  get_item(ps_remap, product_parent);
+		if(remapped_index == NULL){
+		  fprintf(stderr, "\t\t\tneed to remap to %d\n", n_pstates);
+		  remapped_index = malloc(sizeof(int));
+		  *remapped_index = n_pstates;
+		  set_item(ps_remap, product_parent, remapped_index);
+		  set_item(reverse_ps, remapped_index, product_parent);
+		  ++n_pstates;		  
+		  
+		  // add to allowed pairs for rhs state
+		  fprintf(stderr, "\t\t\tadding to state pairs\n");
+		  llist allowed_pairs = (llist)get_item(state_pairs, &(rhs_rule.parent));
+		  llist_insert_right(allowed_pairs, states1 + lhs_rule.parent);
+		  fprintf(stderr, "\t\t\tdone\n");
+		}else{
+		  free(product_parent);
+		}
+		fprintf(stderr, "\t\t\tremapped index is %d\n", *remapped_index);
+		// make and add product rules
+		struct rule *product_rule = malloc(sizeof(struct rule));
+		product_rule->parent = *remapped_index;
+		product_rule->label = lhs_rule.label;
+		product_rule->width = lhs_rule.width;
+		product_rule->children = malloc(lhs_rule.width * sizeof(int));
+
+		// retrieve each children pair
+		for(int k = 0; k < lhs_rule.width; ++k){
+		  struct index_pair product_child = {
+		    .first = lhs_rule.children[k],
+		    .second = rhs_rule.children[k]
+		  };
+		  fprintf(stderr, "\t\t\tlooking for index for child (%d, %d)\n", product_child.first, product_child.second);
+		  int *child_index = get_item(ps_remap, &product_child);
+		  fprintf(stderr, "\t\t\tfound index %d\n", *child_index);
+		  product_rule->children[k] = *child_index;
+		}
+
+		fprintf(stderr, "\t\twidth: %d\n", product_rule->width);
+		fprintf(stderr, "\t\t%d->%d(", product_rule->parent, product_rule->label);
+		print_int_array(product_rule->children, product_rule->width);
+		fprintf(stderr, "\t\t\tinserting in res list\n");
+		llist_insert_right(&product_rules, product_rule);
+		fprintf(stderr, "\t\t\tdone\nnow mapping to old rules\n");
+		
+		// map to original rules
+		struct index_pair *pr_index = malloc(sizeof(struct index_pair));
+		int *rule_index = malloc(sizeof(int));
+
+		pr_index->first = *lhs_index;
+		pr_index->second = *rhs_index;
+		*rule_index = n_pr;
+		set_item(reverse_pr, rule_index, pr_index);
+		++n_pr;
+		fprintf(stderr, "\t\t\tdone, rule index is %d\n", *rule_index);
+	      }
+	      lhs_it->destroy(lhs_it);
+	      lhs_rules->destroy(lhs_rules);
+	    }
+	  }
+	}
+	fprintf(stderr, "\tdestroying iterator\n");
+	x_rules->destroy(x_rules);
+	fprintf(stderr, "\tdone\n");
+	//clean what needs to be cleaned
+	dict_destroy(children_pairing);
+      }
+    }
+    fprintf(stderr, "\tcleaning up agenda item\n");
+    if(item->td_resp != NULL){
+      item->td_resp->destroy(item->td_resp);
+    }
+    free(item);
+    fprintf(stderr, "\tdone\n");
   }
-  return NULL;
+  struct index_pair final_state = {
+    .first = a1->final,
+    .second = a2->final
+  };
+  int *fs_lookup = get_item(ps_remap, &final_state);
+  int fs_code;
+  if(fs_lookup == NULL){
+    fs_code = -1;
+  }else{
+    fs_code = *fs_lookup;
+  }
+  
+  // cleanup
+  llist_destroy(&agenda, NULL);
+  free(states1);
+  free(states2);
+  dict_destroy(state_pairs);
+  dict_destroy(ps_remap);
+  fprintf(stderr, "\tdone  some nice cleanup\n");
+  
+  
+  fprintf(stderr, "\tmaking an array of product rules\n");
+  struct rule *pr_array = NULL;
+  if(!llist_is_empty(&product_rules)){
+    pr_array = malloc(product_rules.size * sizeof(struct rule));
+    struct rule *rule_copy = pr_array;
+    for(ll_cell c = llist_first(&product_rules); c != product_rules.sentinelle; c = c->next){
+      memcpy(rule_copy, c->elem, sizeof(struct rule));
+      fprintf(stderr, "\t\twidth: %d\n", rule_copy->width);
+      fprintf(stderr, "\t\t%d->%d(", rule_copy->parent, rule_copy->label);
+      print_int_array(rule_copy->children, rule_copy->width);
+      ++rule_copy;
+    }
+  }
+  
+  fprintf(stderr, "\tdone, creating automaton with final state %d\n", fs_code);  
+  target->a = create_explicit_automaton(n_pstates, a1->n_symb, pr_array, n_pr, fs_code);
+  free(pr_array);
+  llist_destroy(&product_rules, &rule_destroy);
+  
+  fprintf(stderr, "\tsetting up target\n");
+  
+  target->state_decoder = reverse_ps;
+  target->rule_decoder = reverse_pr;
+
+  fprintf(stderr, "all done\n");
 }
+
 
 

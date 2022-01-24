@@ -34,7 +34,9 @@ int *ci_next(ci_state state){
 	state->tuple[state->v_pos] = state->data[state->v_pos][0];
 	state->indices[state->v_pos] = 0;
 	--state->v_pos;
-	++state->indices[state->v_pos];
+	if(state->v_pos >= 0){
+	  ++state->indices[state->v_pos];
+	}
       }
     }
     state->tuple = NULL;

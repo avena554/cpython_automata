@@ -28,7 +28,7 @@ int cmp_item(const void *item1, const void *item2, void *params){
 
 void destroy_item(void *item, void *params){
   struct item_type_parameters *actual_params = (struct item_type_parameters *) params;
-  dict_item actual_item = (dict_item) item;
+  dict_item actual_item = (dict_item) item;  
   if(actual_params->elem_delete_fn != NULL){
     (*(actual_params->elem_delete_fn))(actual_item->elem);
   }

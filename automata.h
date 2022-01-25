@@ -86,6 +86,9 @@ void build_bu_index_from_explicit(const automaton a);
 
 void intersect_cky(const automaton a1, const automaton a2, struct intersection *target);
 
+void clean_intersection(struct intersection *inter);
+void clean_decoders(struct intersection *inter);
+
 int children_cmp_fn(const void *k1, const void *k2);
 
 #endif /*automata.h*/

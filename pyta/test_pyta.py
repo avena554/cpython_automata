@@ -1,19 +1,34 @@
 import pyta
 
-rules = [(0, 0, (1, 1, 1)), (1, 1, (1, 2)), (0, 0, (0,))]
+rules = [(0, 0, (1, 1, 1)), (1, 1, (2, 2)), (2, 0, tuple()), (1, 1, tuple()), (1, 0, tuple())]
+
+a = pyta.compile(3, 2, rules, 0)
+
+print("td all")
+print([a.get_rule(r) for r in a.td_all(0)])
+print([a.get_rule(r) for r in a.td_all(1)])
+print([a.get_rule(r) for r in a.td_all(2)])
 
 
-a = pyta.compile(3, 2, rules)
+print("\nbu all")
+print([a.get_rule(r) for r in a.bu_all([1, 1, 1])])
+print([a.get_rule(r) for r in a.bu_all((2, 2))])
+print([a.get_rule(r) for r in a.bu_all([0,])])
+print([a.get_rule(r) for r in a.bu_all([])])
 
-print(a.get_rule(0))
-print([a.get_rule(r) for r in a.rules_from_parent(0)])
-print([a.get_rule(r) for r in a.rules_from_parent(1)])
-print([a.get_rule(r) for r in a.rules_from_parent(2)])
-
-print([a.get_rule(r) for r in a.rules_from_children([1, 1, 1])])
-print([a.get_rule(r) for r in a.rules_from_children((1, 2))])
-print([a.get_rule(r) for r in a.rules_from_children([0,])])
-print([a.get_rule(r) for r in a.rules_from_children([])])
-
+print("\ntd labels")
+print([l for l in a.td_labels(1)])
+print("\nbu labels")
+print([l for l in a.bu_labels(tuple())])
 
 
+print("\ntd query")
+print([a.get_rule(r) for r in a.td_query(1, 1)])
+
+print("\nbu query")
+print([a.get_rule(r) for r in a.bu_query(tuple(), 0)])
+
+
+print("\nintersect")
+s = pyta.intersect_cky(a, a)
+print(s)

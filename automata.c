@@ -5,7 +5,7 @@
 #include "list.h"
 #include "utils.h"
 //debug
-#include <stdio.h>
+#include "debug.h"
 #include "avl/avl.h"
 
 
@@ -127,14 +127,14 @@ struct flat_ruleset_iterator{
  * debug utility
  */
 void print_int_array(int *array, int width){
-  fprintf(stderr, "[");
+  debug_msg("[");
   for(int j = 0; j < width; ++j){
-    fprintf(stderr, "%d", array[j]);
+    debug_msg("%d", array[j]);
     if(j < width - 1){
-      fprintf(stderr, ", ");
+      debug_msg(", ");
     }
   }
-  fprintf(stderr, "]\n");
+  debug_msg("]\n");
 }
 
 /*
@@ -674,19 +674,19 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
   llist_insert_left(&agenda, start);
 
   while(!llist_is_empty(&agenda)){
-    fprintf(stderr, "popping next rhs state\n");
+    debug_msg("popping next rhs state\n");
     struct agenda_item *item = (struct agenda_item *)llist_popleft(&agenda);
 
-    fprintf(stderr, "next rhs state is %d\n", item->state);
+    debug_msg("next rhs state is %d\n", item->state);
 
     // check if state has been expanded already
     if(get_item(state_pairs, &(item->state)) == NULL){
-      fprintf(stderr, "state has not been expanded\n");
+      debug_msg("state has not been expanded\n");
       if(!item->children_expanded){
-	fprintf(stderr, "\tchildren have not yet been expanded\n");
+	debug_msg("\tchildren have not yet been expanded\n");
 
 	label_to_ruleset td_resp = a2->td_query(a2, item->state);
-	fprintf(stderr, "\ta2 has been queried for state %d\n", item->state);
+	debug_msg("\ta2 has been queried for state %d\n", item->state);
 	
 	// Push parent state back for pairing after children are expanded
 	struct agenda_item *continuation = malloc(sizeof(struct agenda_item));
@@ -694,28 +694,28 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	continuation->children_expanded = 1;
 	continuation->td_resp = td_resp;
 	llist_insert_left(&agenda, continuation);
-	fprintf(stderr, "\tstate has been pushed back for resuming it's expansion after children's expansion\n");
+	debug_msg("\tstate has been pushed back for resuming it's expansion after children's expansion\n");
 	
 	//Push all children states for expansion	
 	rule_iterator x_rules = td_resp->all_rules(td_resp);	
 	for(int *rule_index = x_rules->next(x_rules); rule_index != NULL; rule_index=x_rules->next(x_rules)){
 	  struct rule r;
 	  a2->fill_rule(a2, &r, *rule_index);
-	  fprintf(stderr, "\tfound rule with arity %d\n", r.width);
+	  debug_msg("\tfound rule with arity %d\n", r.width);
 	  for(int c_index = 0; c_index < r.width; ++c_index){
 	    struct agenda_item *child_item = malloc(sizeof(struct agenda_item));
 	    child_item->state = r.children[c_index];
 	    child_item->children_expanded = 0;
 	    child_item->td_resp = 0;
-	    fprintf(stderr, "\t\tpushing child %d\n", child_item->state);
+	    debug_msg("\t\tpushing child %d\n", child_item->state);
 	    llist_insert_left(&agenda, child_item);
 	  }
 	}
 	x_rules->destroy(x_rules);
-	fprintf(stderr, "\tchildren have been pushed for expansion\n");
+	debug_msg("\tchildren have been pushed for expansion\n");
 		
       }else{
-	fprintf(stderr, "\tchildren have already been expanded\n");
+	debug_msg("\tchildren have already been expanded\n");
 	// init the list of pair states
 	llist target_pairs = malloc(sizeof(struct llist));
 	int *state_key = states2 + item->state;
@@ -727,7 +727,7 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	label_to_ruleset td_resp = item->td_resp;
 	void *children_pairing = dict_create(&children_pairing_params);
 
-	fprintf(stderr, "\tfinding all rhs children tuple\n");
+	debug_msg("\tfinding all rhs children tuple\n");
 	// associate each children tuple with an empty list of children-pairing entries
 	rule_iterator x_rules = td_resp->all_rules(td_resp);
 	for(int *rule_index = x_rules->next(x_rules); rule_index != NULL; rule_index=x_rules->next(x_rules)){
@@ -738,19 +738,21 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	  tuple_key[0] = r.width;
 	  memcpy(tuple_key + 1, r.children, r.width * sizeof(int));
 
-	  fprintf(stderr, "\t\tfound children tuple\n");
+	  debug_msg("\t\tfound children tuple\n");
 	  print_int_array(tuple_key, r.width + 1);
 	  
 	  if(get_item(children_pairing, tuple_key) == NULL){
-	    fprintf(stderr, "\t\t\tchildren tuple is seen for first time\n");
+	    debug_msg("\t\t\tchildren tuple is seen for first time\n");
 	    llist associated_pairs = malloc(sizeof(struct llist));
 	    llist_epsilon_init(associated_pairs);
 	    set_item(children_pairing, tuple_key, associated_pairs);
+	  }else{
+	    free(tuple_key);
 	  }
 	}
 	x_rules->destroy(x_rules);
 	
-	fprintf(stderr, "\tfinding all lhs children tuples\n");
+	debug_msg("\tfinding all lhs children tuples\n");
 	// fill the list of pairs for every children tuple
 	dict_iterator lhs_tuples = dict_items(children_pairing);
 	for(dict_item di = lhs_tuples->next(lhs_tuples); di != NULL; di = lhs_tuples->next(lhs_tuples)){
@@ -759,7 +761,7 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	  int width = ((int *)di->key)[0];
 	  int *rhs = ((int *)di->key) + 1;
 
-	  fprintf(stderr, "\trhs is: \n");
+	  debug_msg("\trhs is: \n");
 	  print_int_array(rhs, width);
 
 	  if(width > 0){
@@ -767,10 +769,10 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	    int *n_pairs = malloc(width  * sizeof(int));
 	    // for each lhs state, find allowed pairs
 	    for(int index = 0; index < width; ++index){
-	      fprintf(stderr, "\t\tcandidates for child %d\n", rhs[index]);
+	      debug_msg("\t\tcandidates for child %d\n", rhs[index]);
 	      llist allowed_pairs = (llist)get_item(state_pairs, rhs + index);
 	      n_pairs[index] = allowed_pairs->size;
-	      fprintf(stderr, "\t\tthere are %d candidates\n", n_pairs[index]);
+	      debug_msg("\t\tthere are %d candidates\n", n_pairs[index]);
 	      // convert the list to an array
 	      int *candidates_index = malloc(allowed_pairs->size * sizeof(int));
 	      if(!llist_is_empty(allowed_pairs)){
@@ -781,10 +783,10 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 		}
 	      }
 	      candidates[index] = candidates_index;
-	      fprintf(stderr, "\t\tcandidates @ %d :\n", index);
-	      print_int_array(candidates[index], n_pairs[index]);
+	      debug_msg("\t\tcandidates @ %d :\n", index);
+	      print_int_array((int*)candidates[index], n_pairs[index]);
 	    }
-	    fprintf(stderr, "\tcartesian iterator\n");
+	    debug_msg("\tcartesian iterator\n");
 	    // use cartesian iterator to range over all rhs pair tuples
 	    struct ci_state lhs_it;
 	    indices = malloc(width * sizeof(int));
@@ -798,11 +800,11 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	      int *lhs = malloc(width * sizeof(int));
 	      // copy the rhs tuple to the new array
 	      memcpy(lhs, tuple, width * sizeof(int));
-	      fprintf(stderr, "\t\tlhs tuple:\n");
+	      debug_msg("\t\tlhs tuple:\n");
 	      print_int_array(lhs, width);
 	      // make a bu query
 	      label_to_ruleset bu_resp = a1->bu_query(a1, lhs, width);
-	      fprintf(stderr, "\t\tbu_query has been made:\n");
+	      debug_msg("\t\tbu_query has been made:\n");
 	     
 	      // allocate a pairing entry that will be used as key.
 	      struct pairing_entry *pe = malloc(sizeof(struct pairing_entry));
@@ -810,33 +812,33 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	      pe->bu_resp = bu_resp;
 
 	      // store in the list
-	      fprintf(stderr, "\t\tstoring in list:\n");
+	      debug_msg("\t\tstoring in list:\n");
 	      llist_insert_right((llist)(di->elem), pe);	      	      
 	    }
 	    // clean temp ressources allocated for cartesian iteration
-	    fprintf(stderr, "\tcleaning up iterator:\n");
+	    debug_msg("\tcleaning up iterator:\n");
 	    free(n_pairs);
 	    free(indices);
 	    free(out);
 	    for(int index = 0; index < width; ++index) free((int *)candidates[index]);
 	    free(candidates);
-	    fprintf(stderr, "\titerator cleaned.\n");
+	    debug_msg("\titerator cleaned.\n");
 	  }else{
-	    fprintf(stderr, "terminal rule case\n");
+	    debug_msg("terminal rule case\n");
 	    label_to_ruleset bu_resp = a1->bu_query(a1, NULL, width);
-	    fprintf(stderr, "\t\tbu_query has been made:\n");
+	    debug_msg("\t\tbu_query has been made:\n");
 	    struct pairing_entry *pe = malloc(sizeof(struct pairing_entry));
 	    pe->lhs = NULL;
 	    pe->bu_resp = bu_resp;
 
 	    // store in the list
-	    fprintf(stderr, "\t\tstoring in list:\n");
+	    debug_msg("\t\tstoring in list:\n");
 	    llist_insert_right((llist)(di->elem), pe);
 	  }
 	}
 	lhs_tuples->destroy(lhs_tuples);
 
-	fprintf(stderr, "\tbuilding product rules\n");
+	debug_msg("\tbuilding product rules\n");
 	x_rules = td_resp->all_rules(td_resp);
 	for(int *rhs_index = x_rules->next(x_rules); rhs_index != NULL; rhs_index=x_rules->next(x_rules)){
 	  struct rule rhs_rule;	  
@@ -848,39 +850,39 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	  tuple_key[0] = rhs_rule.width;
 	  memcpy(tuple_key + 1, rhs_rule.children, rhs_rule.width * sizeof(int));
 
-	  fprintf(stderr, "\t\trhs width and children:\n");
+	  debug_msg("\t\trhs width and children:\n");
 	  print_int_array(tuple_key, rhs_rule.width + 1);
 	  
 	  llist pes = get_item(children_pairing, tuple_key);
 	  free(tuple_key);
 
-	  fprintf(stderr, "\t\tentries queried\n");
+	  debug_msg("\t\tentries queried\n");
 	  
 	  // loop over all pes
 	  if(!llist_is_empty(pes)){
-	    fprintf(stderr, "\t\tthere are entries:\n");
+	    debug_msg("\t\tthere are entries:\n");
 	    for(ll_cell c = llist_first(pes); c != pes->sentinelle; c = c->next){		
 	      struct pairing_entry *pe = (struct pairing_entry *)(c->elem);
-	      fprintf(stderr, "\t\tlhs children\n");
+	      debug_msg("\t\tlhs children\n");
 	      print_int_array(pe->lhs, rhs_rule.width);
 		
-	      fprintf(stderr, "\t\tquerying for label %d:\n", rhs_rule.label);
+	      debug_msg("\t\tquerying for label %d:\n", rhs_rule.label);
 	      ruleset lhs_rules = pe->bu_resp->query(pe->bu_resp, rhs_rule.label);
-	      fprintf(stderr, "\t\tdone, iterating over lhs rules\n");
+	      debug_msg("\t\tdone, iterating over lhs rules\n");
 	      rule_iterator lhs_it = lhs_rules->create_iterator(lhs_rules);
 	      for(int *lhs_index = lhs_it->next(lhs_it); lhs_index != NULL; lhs_index = lhs_it->next(lhs_it)){
 		struct rule lhs_rule;
 		a1->fill_rule(a1, &lhs_rule, *lhs_index);
-		fprintf(stderr, "\t\t\tlhs parent:  %d\n", lhs_rule.parent);
+		debug_msg("\t\t\tlhs parent:  %d\n", lhs_rule.parent);
 
 		// remap the parent product state
-		fprintf(stderr, "\t\t\tremaping (%d, %d)\n", lhs_rule.parent, rhs_rule.parent);
+		debug_msg("\t\t\tremaping (%d, %d)\n", lhs_rule.parent, rhs_rule.parent);
 		struct index_pair *product_parent = malloc(sizeof(struct index_pair));
 		product_parent->first = lhs_rule.parent;
 		product_parent->second = rhs_rule.parent;
 		int *remapped_index =  get_item(ps_remap, product_parent);
 		if(remapped_index == NULL){
-		  fprintf(stderr, "\t\t\tneed to remap to %d\n", n_pstates);
+		  debug_msg("\t\t\tneed to remap to %d\n", n_pstates);
 		  remapped_index = malloc(sizeof(int));
 		  *remapped_index = n_pstates;
 		  set_item(ps_remap, product_parent, remapped_index);
@@ -888,14 +890,14 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 		  ++n_pstates;		  
 		  
 		  // add to allowed pairs for rhs state
-		  fprintf(stderr, "\t\t\tadding to state pairs\n");
+		  debug_msg("\t\t\tadding to state pairs\n");
 		  llist allowed_pairs = (llist)get_item(state_pairs, &(rhs_rule.parent));
 		  llist_insert_right(allowed_pairs, states1 + lhs_rule.parent);
-		  fprintf(stderr, "\t\t\tdone\n");
+		  debug_msg("\t\t\tdone\n");
 		}else{
 		  free(product_parent);
 		}
-		fprintf(stderr, "\t\t\tremapped index is %d\n", *remapped_index);
+		debug_msg("\t\t\tremapped index is %d\n", *remapped_index);
 		// make and add product rules
 		struct rule *product_rule = malloc(sizeof(struct rule));
 		product_rule->parent = *remapped_index;
@@ -909,18 +911,18 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 		    .first = lhs_rule.children[k],
 		    .second = rhs_rule.children[k]
 		  };
-		  fprintf(stderr, "\t\t\tlooking for index for child (%d, %d)\n", product_child.first, product_child.second);
+		  debug_msg("\t\t\tlooking for index for child (%d, %d)\n", product_child.first, product_child.second);
 		  int *child_index = get_item(ps_remap, &product_child);
-		  fprintf(stderr, "\t\t\tfound index %d\n", *child_index);
+		  debug_msg("\t\t\tfound index %d\n", *child_index);
 		  product_rule->children[k] = *child_index;
 		}
 
-		fprintf(stderr, "\t\twidth: %d\n", product_rule->width);
-		fprintf(stderr, "\t\t%d->%d(", product_rule->parent, product_rule->label);
+		debug_msg("\t\twidth: %d\n", product_rule->width);
+		debug_msg("\t\t%d->%d(", product_rule->parent, product_rule->label);
 		print_int_array(product_rule->children, product_rule->width);
-		fprintf(stderr, "\t\t\tinserting in res list\n");
+		debug_msg("\t\t\tinserting in res list\n");
 		llist_insert_right(&product_rules, product_rule);
-		fprintf(stderr, "\t\t\tdone\nnow mapping to old rules\n");
+		debug_msg("\t\t\tdone\nnow mapping to old rules\n");
 		
 		// map to original rules
 		struct index_pair *pr_index = malloc(sizeof(struct index_pair));
@@ -931,26 +933,26 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 		*rule_index = n_pr;
 		set_item(reverse_pr, rule_index, pr_index);
 		++n_pr;
-		fprintf(stderr, "\t\t\tdone, rule index is %d\n", *rule_index);
+		debug_msg("\t\t\tdone, rule index is %d\n", *rule_index);
 	      }
 	      lhs_it->destroy(lhs_it);
 	      lhs_rules->destroy(lhs_rules);
 	    }
 	  }
 	}
-	fprintf(stderr, "\tdestroying iterator\n");
+	debug_msg("\tdestroying iterator\n");
 	x_rules->destroy(x_rules);
-	fprintf(stderr, "\tdone\n");
+	debug_msg("\tdone\n");
 	//clean what needs to be cleaned
 	dict_destroy(children_pairing);
       }
     }
-    fprintf(stderr, "\tcleaning up agenda item\n");
+    debug_msg("\tcleaning up agenda item\n");
     if(item->td_resp != NULL){
       item->td_resp->destroy(item->td_resp);
     }
     free(item);
-    fprintf(stderr, "\tdone\n");
+    debug_msg("\tdone\n");
   }
   struct index_pair final_state = {
     .first = a1->final,
@@ -970,35 +972,43 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
   free(states2);
   dict_destroy(state_pairs);
   dict_destroy(ps_remap);
-  fprintf(stderr, "\tdone  some nice cleanup\n");
+  debug_msg("\tdone  some nice cleanup\n");
   
   
-  fprintf(stderr, "\tmaking an array of product rules\n");
+  debug_msg("\tmaking an array of product rules\n");
   struct rule *pr_array = NULL;
   if(!llist_is_empty(&product_rules)){
     pr_array = malloc(product_rules.size * sizeof(struct rule));
     struct rule *rule_copy = pr_array;
     for(ll_cell c = llist_first(&product_rules); c != product_rules.sentinelle; c = c->next){
       memcpy(rule_copy, c->elem, sizeof(struct rule));
-      fprintf(stderr, "\t\twidth: %d\n", rule_copy->width);
-      fprintf(stderr, "\t\t%d->%d(", rule_copy->parent, rule_copy->label);
+      debug_msg("\t\twidth: %d\n", rule_copy->width);
+      debug_msg("\t\t%d->%d(", rule_copy->parent, rule_copy->label);
       print_int_array(rule_copy->children, rule_copy->width);
       ++rule_copy;
     }
   }
   
-  fprintf(stderr, "\tdone, creating automaton with final state %d\n", fs_code);  
+  debug_msg("\tdone, creating automaton with final state %d\n", fs_code);  
   target->a = create_explicit_automaton(n_pstates, a1->n_symb, pr_array, n_pr, fs_code);
   free(pr_array);
   llist_destroy(&product_rules, &rule_destroy);
   
-  fprintf(stderr, "\tsetting up target\n");
+  debug_msg("\tsetting up target\n");
   
   target->state_decoder = reverse_ps;
   target->rule_decoder = reverse_pr;
 
-  fprintf(stderr, "all done\n");
+  debug_msg("all done\n");
 }
 
+void clean_intersection(struct intersection *inter){
+  clean_decoders(inter);
+  inter->a->destroy(inter->a);
+}
 
+void clean_decoders(struct intersection *inter){
+  dict_destroy(inter->state_decoder);
+  dict_destroy(inter->rule_decoder);
+}
 

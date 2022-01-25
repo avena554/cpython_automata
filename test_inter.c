@@ -16,11 +16,14 @@ automaton make_test(){
     .parent =  2, .label = 0, .width = 0, .children = c3
   };
   struct rule r4 = {
+    .parent =  1, .label = 1, .width = 0, .children = c3
+  };
+  struct rule r5 = {
     .parent =  1, .label = 0, .width = 0, .children = c3
   };
 
-  struct rule rs[4] = {r1, r2, r3, r4};
-  automaton a = create_explicit_automaton(3, 2, rs, 4, 0);
+  struct rule rs[5] = {r1, r2, r3, r4, r5};
+  automaton a = create_explicit_automaton(3, 2, rs, 5, 0);
   build_td_index_from_explicit(a);
   build_bu_index_from_explicit(a);
   return a;  
@@ -41,9 +44,7 @@ void test_intersect(automaton a){
   */
   
   a->destroy(a);
-  dict_destroy(inter.state_decoder);
-  dict_destroy(inter.rule_decoder);
-  inter.a->destroy(inter.a);
+  clean_intersection(&inter);
 }
 
 

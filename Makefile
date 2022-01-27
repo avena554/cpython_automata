@@ -7,7 +7,7 @@ VGFLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
 avl:
 	cd avl && $(MAKE) avl.o
 
-avl.c:
+avl/avl.c:
 	cd avl && $(MAKE) avl.c
 
 dict.c: dict.h

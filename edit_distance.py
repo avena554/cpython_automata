@@ -1,6 +1,6 @@
 import pyta
 from pyta.automata.edit_transducer import edit_transducer
-from pyta.automata import inter, scores_intersection, invhom, DynamicEncoder
+from pyta.automata import inter, inter_ac, scores_intersection, invhom, DynamicEncoder
 from pyta.automata.semirings import inside_weight, MaxPlusSemiring, as_max_plus_element
 from pyta.algebra.LeftConcAlgebra import decompose
 import argparse
@@ -61,8 +61,8 @@ inform('\tinverting second homomorphism...')
 inv2 = invhom(h2, d2, t_sig, d_sig)
 inform('\t...done: %d rules, %d states, %d labels' % (inv2.n_rules, len(inv2.states), len(inv2.sigma)))
 
-#print('inv1', inv1)
-#print('inv2', inv2)
+# print('inv1', inv1)
+# print('inv2', inv2)
 
 
 inform('\tcombining entries...')
@@ -72,8 +72,8 @@ inform('\t...done: %d rules, %d states, %d labels'
        % (partial_chart.n_rules, len(partial_chart.states), len(partial_chart.sigma)))
 
 inform('\tparsing...')
-chart = inter(partial_chart, t, t_sig, t.n_symb)
-weights = scores_intersection(chart, scores_right=scores)
+chart = inter_ac(t, partial_chart, t_sig, t.n_symb)
+weights = scores_intersection(chart, scores_left=scores)
 inform('\t...done: %d rules, %d states, %d labels' % (chart.n_rules, len(chart.states), len(chart.sigma)))
 inform('...done parsing')
 

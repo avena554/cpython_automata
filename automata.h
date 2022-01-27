@@ -84,6 +84,8 @@ void build_td_index_from_explicit(const automaton a);
 
 void build_bu_index_from_explicit(const automaton a);
 
+
+void intersect(const automaton a1, const automaton a2, struct intersection *target);
 void intersect_cky(const automaton a1, const automaton a2, struct intersection *target);
 
 void clean_intersection(struct intersection *inter);

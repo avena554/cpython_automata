@@ -576,12 +576,8 @@ struct pairing_entry{
 };
 
 /*
- * auxiliary needed for intersect
+ * auxiliaries needed for intersect
  */
-void list_elem_destroy(void *elem){
-  llist_destroy((llist)elem, NULL);
-  free(elem);
-}
 
 void pe_destroy(void *elem){
   struct pairing_entry *pe = (struct pairing_entry *)elem;
@@ -621,7 +617,12 @@ int index_pair_cmp_fn(const void *k1, const void *k2){
 const struct item_type_parameters state_pairing_params = {
   .key_cmp_fn = &int_cmp_fn,
   .key_delete_fn = NULL,
-  .elem_delete_fn = &list_elem_destroy
+  .elem_delete_fn = &dict_destroy
+};
+const struct item_type_parameters stateset_params = {
+  .key_cmp_fn = &int_cmp_fn,
+  .key_delete_fn = NULL,
+  .elem_delete_fn = NULL
 };
 const struct item_type_parameters children_pairing_params = {
   .key_cmp_fn = &children_cmp_fn,
@@ -990,11 +991,10 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
       }else{
 	debug_msg("\tchildren have already been expanded\n");
 	// init the list of pair states
-	llist target_pairs = malloc(sizeof(struct llist));
+	void *target_pairs = dict_create(&stateset_params);
 	int *state_key = states2 + item->state;
 
-	//init the list of paired lhs states
-	llist_epsilon_init(target_pairs);
+	//initially empty set of paired lhs states
 	set_item(state_pairs, state_key, target_pairs);
 	
 	label_to_ruleset td_resp = item->td_resp;
@@ -1043,17 +1043,20 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 	    // for each lhs state, find allowed pairs
 	    for(int index = 0; index < width; ++index){
 	      debug_msg("\t\tcandidates for child %d\n", rhs[index]);
-	      llist allowed_pairs = (llist)get_item(state_pairs, rhs + index);
-	      n_pairs[index] = allowed_pairs->size;
+	      void *allowed_pairs = get_item(state_pairs, rhs + index);
+	      n_pairs[index] = dict_size(allowed_pairs);
 	      debug_msg("\t\tthere are %d candidates\n", n_pairs[index]);
 	      // convert the list to an array
-	      int *candidates_index = malloc(allowed_pairs->size * sizeof(int));
-	      if(!llist_is_empty(allowed_pairs)){
+	      int *candidates_index = NULL;
+	      if(n_pairs[index] > 0){
+		candidates_index = malloc(n_pairs[index] * sizeof(int));
 		int k = 0;
-		for(ll_cell c = llist_first(allowed_pairs); c != allowed_pairs->sentinelle; c = c->next){		
+		dict_iterator cd_it = dict_items(allowed_pairs);
+		for(dict_item c = cd_it->next(cd_it); c != NULL; c = cd_it->next(cd_it)){		
 		  candidates_index[k] = *((int *)(c->elem)); 
 		  ++k;
 		}
+		cd_it->destroy(cd_it);
 	      }
 	      candidates[index] = candidates_index;
 	      debug_msg("\t\tcandidates @ %d :\n", index);
@@ -1164,8 +1167,8 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 		  
 		  // add to allowed pairs for rhs state
 		  debug_msg("\t\t\tadding to state pairs\n");
-		  llist allowed_pairs = (llist)get_item(state_pairs, &(rhs_rule.parent));
-		  llist_insert_right(allowed_pairs, states1 + lhs_rule.parent);
+		  void *allowed_pairs = get_item(state_pairs, &(rhs_rule.parent));
+		  set_item(allowed_pairs, states1 + lhs_rule.parent, states1 + lhs_rule.parent);
 		  debug_msg("\t\t\tdone\n");
 		}else{
 		  free(product_parent);

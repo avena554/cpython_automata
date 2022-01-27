@@ -1,7 +1,7 @@
 import pyta
 from pyta.util.misc import cartesian_product
-from pyta.automata.pure_python import compile_pure, intersect_pure
-from pyta.pyta import intersect as intersect_fast, compile as compile_fast
+from pyta.automata.pure_python import compile_pure, intersect_pure, intersect_ac_pure
+from pyta.pyta import intersect as intersect_fast, compile as compile_fast, intersect_cky as intersect_ac_fast
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
 
 
@@ -19,6 +19,15 @@ def core_intersect(a1, a2):
         return intersect_fast(a1, a2)
     elif pyta.MODE is pyta.Python:
         return intersect_pure(a1, a2)
+    else:
+        raise NotImplementedError
+
+
+def core_intersect_ac(a1, a2):
+    if pyta.MODE is pyta.C:
+        return intersect_ac_fast(a1, a2)
+    elif pyta.MODE is pyta.Python:
+        return intersect_ac_pure(a1, a2)
     else:
         raise NotImplementedError
 
@@ -182,6 +191,16 @@ def invhom(h, a, lhs_encoder, rhs_encoder):
 
 def inter(a1, a2, labels_decoder, nsymb):
     core_inter, final, decode_s, decode_r = core_intersect(a1.core, a2.core)
+    return PyTA(
+        core_inter, final,
+        len(decode_s), len(decode_r),
+        nsymb, StaticDecoder(decode_s),
+        StaticDecoder(decode_r), labels_decoder
+    )
+
+
+def inter_ac(a1, a2, labels_decoder, nsymb):
+    core_inter, final, decode_s, decode_r = core_intersect_ac(a1.core, a2.core)
     return PyTA(
         core_inter, final,
         len(decode_s), len(decode_r),

@@ -32,9 +32,8 @@ automaton make_test(){
 void test_intersect(automaton a){
   struct intersection inter;
   fprintf(stderr, "intersecting a with itself...\n");
-  intersect(a, a, &inter);
+  intersect_cky(a, a, &inter);
   clean_decoders(&inter);
-  //intersect_cky(a, a, &inter);
   struct intersection sqinter;
   fprintf(stderr, "intersecting the intersection with a again\n");
   intersect(a, inter.a, &sqinter);

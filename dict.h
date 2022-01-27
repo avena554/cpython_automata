@@ -1,6 +1,8 @@
 #ifndef DICT_H
 #define DICT_H
 
+#include <stddef.h>
+
 /*
  * header for a generic dictionary (with elements of a fixed type)
  */
@@ -28,6 +30,8 @@ void dict_destroy(void *d);
 
 void set_item(const void *d, void *key, void *value);
 void *get_item(const void *d, void *key);
+
+size_t dict_size(const void *d);
 
 int int_cmp_fn(const void *k1, const void *k2);
 

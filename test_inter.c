@@ -13,13 +13,13 @@ automaton make_test(){
     .parent = 1, .label = 1, .width = 2, .children = c2
   };
   struct rule r3 = {
-    .parent =  2, .label = 0, .width = 0, .children = c3
+    .parent =  2, .label = 2, .width = 0, .children = c3
   };
   struct rule r4 = {
-    .parent =  1, .label = 1, .width = 0, .children = c3
+    .parent =  1, .label = 3, .width = 0, .children = c3
   };
   struct rule r5 = {
-    .parent =  1, .label = 0, .width = 0, .children = c3
+    .parent =  1, .label = 2, .width = 0, .children = c3
   };
 
   struct rule rs[5] = {r1, r2, r3, r4, r5};
@@ -31,20 +31,17 @@ automaton make_test(){
 
 void test_intersect(automaton a){
   struct intersection inter;
-  intersect_cky(a, a, &inter);
-
-  /*
-    dict_iterator debug = dict_items(inter.state_decoder);
-    for(dict_item dbg = debug->next(debug); dbg != NULL; dbg = debug->next(debug)){
-    fprintf(stderr, "key: %d\n", *(int *)dbg->key);
-    struct index_pair *elem = (struct index_pair *)dbg->elem;
-    fprintf(stderr, "elem: (%d, %d)\n", elem->first, elem->second);
-    }
-    debug->destroy(debug);
-  */
-  
+  fprintf(stderr, "intersecting a with itself...\n");
+  intersect(a, a, &inter);
+  clean_decoders(&inter);
+  //intersect_cky(a, a, &inter);
+  struct intersection sqinter;
+  fprintf(stderr, "intersecting the intersection with a again\n");
+  intersect(a, inter.a, &sqinter);
+  fprintf(stderr, "...done\n");
+  inter.a->destroy(inter.a);
   a->destroy(a);
-  clean_intersection(&inter);
+  clean_intersection(&sqinter);
 }
 
 
@@ -54,7 +51,5 @@ int main(void){
   fprintf(stderr, "creating automaton...\n");
   automaton a = make_test();
   fprintf(stderr, "...done\n");
-  fprintf(stderr, "intersecting a with itself...\n");
   test_intersect(a);
-  fprintf(stderr, "...done\n");
 }

@@ -2,6 +2,7 @@
 #include "avl/avl.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include "debug.h"
 
 typedef struct avl_dict_iterator *avl_dict_iterator;
 struct avl_dict_iterator{
@@ -22,8 +23,8 @@ int int_cmp_fn(const void *k1, const void *k2){
 }
 
 int cmp_item(const void *item1, const void *item2, void *params){
-  struct item_type_parameters *actual_params = (struct item_type_parameters *) params; 
-  return (*(actual_params->key_cmp_fn))(((dict_item)item1)->key, ((dict_item)item2)->key);
+  struct item_type_parameters *actual_params = (struct item_type_parameters *) params;
+  return actual_params->key_cmp_fn(((dict_item)item1)->key, ((dict_item)item2)->key);
 }
 
 void destroy_item(void *item, void *params){

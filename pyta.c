@@ -1,7 +1,9 @@
+
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "automata.h"
 #include "dict.h"
+#include "debug.h"
 
 /* 
  * TODO: Use python dedicated memory allocators instead of malloc
@@ -23,7 +25,7 @@ static PyObject *bu_query(PyObject *self, PyObject *args);
 static PyObject *get_rule(PyObject *self, PyObject *args);
 
 static void pyta_automaton_dealloc(PyObject *o){
-  fprintf(stderr, "Python is destroying the automaton\n");
+  debug_msg("Python is destroying the automaton\n");
   pyta_automaton *pa = (pyta_automaton *)o;
   automaton a = pa->a;
   if(a != NULL){
@@ -80,7 +82,6 @@ static PyTypeObject pyta_automaton_t = {
 
 static void clean_several(int n_pointers, void *pointers[]){
   for(int i = 0; i < n_pointers; ++i){
-    fprintf(stderr, "dans la fonction iteration %d : %p\n", i, pointers[i]);
     free(pointers[i]);
   }
 }
@@ -360,8 +361,8 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
   Py_ssize_t n_rules = PySequence_Size(rules);
   if(n_rules < 0) return NULL;
 
-  // fprintf(stderr, "there are %d states, %d symbols and %d rules\n", n_states, n_symb, (int)n_rules);
-  // fprintf(stderr, "allocating space for rules\n");
+  // debug_msg("there are %d states, %d symbols and %d rules\n", n_states, n_symb, (int)n_rules);
+  // debug_msg("allocating space for rules\n");
 
   struct rule *c_rules = malloc(n_rules * sizeof(struct rule));  
   int *all_rules_children = NULL;
@@ -393,7 +394,7 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
     // PySequence_GetItem makes a new ref
     Py_DECREF(parent);
 
-    // fprintf(stderr, "retrieving label\n");
+    // debug_msg("retrieving label\n");
     PyObject *label = PySequence_GetItem(rule, 1);
     if(label == NULL){
       clean_several(n_to_clean, to_clean);
@@ -475,8 +476,6 @@ static PyObject *compile_automaton(PyObject *self, PyObject *args){
 
   
   automaton a = create_explicit_automaton(n_states, n_symb, c_rules, n_rules, final);
-  fprintf(stderr, "to clean %d\n", n_to_clean);
-  fprintf(stderr, "Avant l'appel: \n\tpointeur 1 : %p\tpointeur 2 : %p\n", c_rules, all_rules_children);
   clean_several(n_to_clean, to_clean);
   //free(all_rules_children);
   //free(c_rules);
@@ -575,7 +574,73 @@ static PyObject *pyta_intersect_cky(PyObject *self, PyObject *args){
     return NULL;
   }
   
-  PyObject *summary =  Py_BuildValue("(NNN)", target_automaton, py_state_decoder, py_rule_decoder);
+  PyObject *summary =  Py_BuildValue("(NiNN)", target_automaton, target.a->final, py_state_decoder, py_rule_decoder);
+  if(summary == NULL){
+    target.a->destroy(target.a);
+    Py_DECREF(py_state_decoder);
+    Py_DECREF(py_rule_decoder);
+    Py_DECREF(target_automaton);
+    return NULL;
+  }
+
+  build_td_index_from_explicit(target.a);
+  build_bu_index_from_explicit(target.a);
+  return summary;
+}
+
+
+/*
+ * TODO: factorize intersection python wrappers
+ */
+static PyObject *pyta_intersect(PyObject *self, PyObject *args){
+  PyObject *lhs_auto;
+  PyObject *rhs_auto;
+  
+  if(!PyArg_ParseTuple(args, "O!O!", &pyta_automaton_t, &lhs_auto, &pyta_automaton_t, &rhs_auto)) return NULL;
+  automaton a1 = ((pyta_automaton *)lhs_auto)->a;
+  automaton a2 = ((pyta_automaton *)rhs_auto)->a;
+
+
+  if(a1 == NULL || a2 == NULL){
+    PyErr_SetString(PyExc_ValueError, "One of the argument object is an unitialized builtin automaton");
+    return NULL;
+  }  
+  
+  struct intersection target;
+  intersect(a1, a2, &target);  
+  
+  PyObject *py_state_decoder = dict_as_PyDict(target.state_decoder,
+					      (PyObject *(*)(void *))&intref_as_PyLong,
+					      (PyObject *(*)(void *))&pair_as_PyTuple
+					      );
+  if(py_state_decoder == NULL){
+    clean_intersection(&target);
+    return NULL;
+  }
+
+  
+  PyObject *py_rule_decoder = dict_as_PyDict(target.rule_decoder,
+					     (PyObject *(*)(void *))&intref_as_PyLong,
+					     (PyObject *(*)(void *))&pair_as_PyTuple
+					     );
+  if(py_rule_decoder == NULL){
+    clean_intersection(&target);
+    Py_DECREF(py_state_decoder); 
+    return NULL;
+  }
+  
+  // we can clean the C state and rule decoders which will be no longer of use
+  // However, we obviously must keep the intersection automaton alive.
+  clean_decoders(&target);
+  PyObject *target_automaton = pyta_from_builtin(target.a);
+  if(target_automaton == NULL){
+    target.a->destroy(target.a);
+    Py_DECREF(py_state_decoder);
+    Py_DECREF(py_rule_decoder);
+    return NULL;
+  }
+  
+  PyObject *summary =  Py_BuildValue("(NiNN)", target_automaton, target.a->final, py_state_decoder, py_rule_decoder);
   if(summary == NULL){
     target.a->destroy(target.a);
     Py_DECREF(py_state_decoder);
@@ -591,7 +656,8 @@ static PyObject *pyta_intersect_cky(PyObject *self, PyObject *args){
 
 static PyMethodDef pyta_methods[] = {
   {"compile", compile_automaton, METH_VARARGS, "Build an automaton from a list of rules."},
-  {"intersect_cky", pyta_intersect_cky, METH_VARARGS, "Intersects two automaton. RHS automaton must be acyclic, or else very bad things will ensue."},
+  {"intersect_cky", pyta_intersect_cky, METH_VARARGS, "Intersect two automata. RHS automaton must be acyclic, or else very bad things will ensue."},
+  {"intersect", pyta_intersect, METH_VARARGS, "Intersect two automata."},
   {NULL, NULL, 0, NULL} /*Sentinel*/
 };
 

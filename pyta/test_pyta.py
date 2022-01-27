@@ -30,5 +30,5 @@ print([a.get_rule(r) for r in a.bu_query(tuple(), 0)])
 
 
 print("\nintersect")
-s = pyta.intersect_cky(a, a)
+s = pyta.intersect(a, a)
 print(s)

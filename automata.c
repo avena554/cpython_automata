@@ -494,8 +494,8 @@ automaton create_explicit_automaton(int n_states, int n_symb, struct rule *rules
     current_rule = rules + r;
     row = rules_mat + r*s_size;
     /*
- * store the rule index as its name
- */
+     * store the rule index as its name
+     */
     row[0] = r;
     row[1] = current_rule->parent;
     row[2] = current_rule->label;
@@ -605,12 +605,14 @@ int index_pair_cmp_fn(const void *k1, const void *k2){
   struct index_pair *v1 = (struct index_pair *)k1;
   struct index_pair *v2 = (struct index_pair *)k2;
 
+  // debug_msg("cmp: (%d, %d) to (%d, %d)\n", v1->first, v1->second, v2->first, v2->second);
+
   if(v1->first < v2->first){
     return -1;
   }else{
     if(v1->first > v2->first){
       return 1;
-    }else{
+    }else{      
       return int_cmp_fn(&(v1->second), &(v2->second));
     }
   }
@@ -624,23 +626,294 @@ const struct item_type_parameters state_pairing_params = {
 const struct item_type_parameters children_pairing_params = {
   .key_cmp_fn = &children_cmp_fn,
   .key_delete_fn = &free,
-    .elem_delete_fn = &list_pe_destroy
+  .elem_delete_fn = &list_pe_destroy
 };
 const struct item_type_parameters product_remap_params = {
   .key_cmp_fn = &index_pair_cmp_fn,
-    .key_delete_fn = NULL,
-    .elem_delete_fn = NULL
+  .key_delete_fn = NULL,
+  .elem_delete_fn = NULL
 };
 const struct item_type_parameters reverse_remap_params = {
   .key_cmp_fn = &int_cmp_fn,
   .key_delete_fn = &free,
   .elem_delete_fn = &free
 };
+const struct item_type_parameters pairset_params = {
+  .key_cmp_fn = &index_pair_cmp_fn,
+  .key_delete_fn = NULL,
+  .elem_delete_fn = NULL
+};
+
+void clean_intersection(struct intersection *inter){
+  clean_decoders(inter);
+  inter->a->destroy(inter->a);
+}
+
+void clean_decoders(struct intersection *inter){
+  dict_destroy(inter->state_decoder);
+  dict_destroy(inter->rule_decoder);
+}
+
+
+
+struct intersection_slate{
+  int n_ps;
+  int n_pr;
+  struct llist product_rules;  
+  void *ps_encoder;
+  void *ps_decoder;
+  void *pr_decoder;
+  automaton lhs;
+  automaton rhs;
+};
+
+void intersection_setup(const automaton a1, const automaton a2, struct intersection_slate *slate){
+  slate->n_ps = 0;
+  slate->n_pr = 0;
+  llist_epsilon_init(&(slate->product_rules));
+  slate->ps_encoder = dict_create(&product_remap_params);
+  slate->ps_decoder = dict_create(&reverse_remap_params);
+  slate->pr_decoder = dict_create(&reverse_remap_params);
+  slate->lhs = a1;
+  slate->rhs = a2;
+}
+
+void clean_nonexposed_slate_members(struct intersection_slate *slate){
+  dict_destroy(slate->ps_encoder);
+  llist_destroy(&(slate->product_rules), &rule_destroy);
+}
+
+struct index_pair *encode_ps(struct index_pair *ps, struct intersection_slate *slate){
+  debug_msg("trying to retrieve (%d, %d)\n", ps->first, ps->second);
+  int *code = get_item(slate->ps_encoder, ps);
+  debug_msg("found object @ %p\n", code);
+
+  if(code != NULL){
+    debug_msg("pair pointer @ %p\n", get_item(slate->ps_decoder, code));
+    debug_msg("code : %d\n", *code); 
+    return get_item(slate->ps_decoder, code);
+  }
+  // allocate a pair and copy the data
+  struct index_pair *p_stored = malloc(sizeof(struct index_pair));
+  *p_stored = *ps;
+  
+  // allocate an int for the code
+  code = malloc(sizeof(int));
+  *code = slate->n_ps;
+  
+  set_item(slate->ps_encoder, p_stored, code);
+  set_item(slate->ps_decoder, code, p_stored);
+
+  ++(slate->n_ps);
+  return p_stored;
+}
+
+
+void build_product_rule(struct rule *p_rule, struct rule *l_rule, struct rule *r_rule, struct intersection_slate *slate){
+  struct index_pair p_parent = {
+    .first = l_rule->parent,
+    .second = r_rule->parent
+  };
+  struct index_pair p_child;
+  int width = l_rule->width;
+
+  debug_msg("encoding parent\n");
+  debug_msg("parent is (%d, %d)\n", p_parent.first, p_parent.second);
+  // parent should be encoded already in the current use cases, but who knows. 
+  int *parent_code = get_item(slate->ps_encoder, encode_ps(&p_parent, slate));
+
+  debug_msg("parent code is  %d\n", *parent_code);
+
+  p_rule->parent = *parent_code;
+  p_rule->label = l_rule->label;
+  p_rule->width = width;
+  p_rule->children = malloc(width * sizeof(int));
+  for(int i = 0; i < l_rule->width; ++i){
+    int *child_code;
+    p_child.first = l_rule->children[i];
+    p_child.second = r_rule->children[i];
+    debug_msg("encoding child %d\n", i);
+    child_code = get_item(slate->ps_encoder, encode_ps(&p_child, slate));
+    p_rule->children[i] = *child_code;
+  }
+}
+
+
+void pair_all_rules(ruleset lhs_rules, ruleset rhs_rules, struct intersection_slate *slate, llist accu){
+  rule_iterator lhs_it = lhs_rules->create_iterator(lhs_rules);
+  rule_iterator rhs_it = rhs_rules->create_iterator(rhs_rules);
+
+  for(int *l_index = lhs_it->next(lhs_it); l_index != NULL; l_index = lhs_it->next(lhs_it)){
+    debug_msg("\tfound lhs rule: %d\n", *l_index);
+    for(int *r_index = rhs_it->next(rhs_it); r_index != NULL; r_index = rhs_it->next(rhs_it)){
+      debug_msg("\t\tfound rhs rule: %d\n", *r_index);
+      struct rule l_rule;
+      struct rule r_rule;
+      struct rule *pr = malloc(sizeof(struct rule));
+      int *pr_index = malloc(sizeof(int));
+      struct index_pair *p_indices = malloc(sizeof(struct index_pair));
+
+      p_indices->first = *l_index;
+      p_indices->second = *r_index;
+      
+      slate->lhs->fill_rule(slate->lhs, &l_rule, *l_index);
+      slate->rhs->fill_rule(slate->rhs, &r_rule, *r_index);
+      debug_msg("\t\tlhs: %d->%d", l_rule.parent, l_rule.label);
+      print_int_array(l_rule.children, l_rule.width);
+      debug_msg("\t\trhs: %d->%d", r_rule.parent, r_rule.label);
+      print_int_array(r_rule.children, r_rule.width);
+
+      debug_msg("\tbuilding product rule\n");
+      build_product_rule(pr, &l_rule, &r_rule, slate);
+      debug_msg("\t\tbuilt pr: %d->%d", pr->parent, pr->label);
+      print_int_array(pr->children, pr->width);
+      // store product_rule in decoder and in accu
+      *pr_index = slate->n_pr;
+      ++(slate->n_pr);
+      set_item(slate->pr_decoder, pr_index, p_indices);
+      llist_insert_right(accu, pr);
+    } 
+  }
+  lhs_it->destroy(lhs_it);
+  rhs_it->destroy(rhs_it);
+}
+
+
+void fill_rule_array_with_list(llist rule_list, struct rule *rule_array){
+  struct rule *rule_copy = rule_array;
+  for(ll_cell c = llist_first(rule_list); c != rule_list->sentinelle; c = c->next){
+    memcpy(rule_copy, c->elem, sizeof(struct rule));
+    debug_msg("\t\twidth: %d\n", rule_copy->width);
+    debug_msg("\t\t%d->%d(", rule_copy->parent, rule_copy->label);
+    print_int_array(rule_copy->children, rule_copy->width);
+    ++rule_copy;
+  }
+}
+
+
+automaton build_product_automaton(struct intersection_slate *slate, struct index_pair *final_states){
+  int *fs_code = get_item(slate->ps_encoder, final_states);
+  automaton pa;
+
+  struct rule *rule_array = NULL;
+  if(!llist_is_empty(&(slate->product_rules))){
+    rule_array = malloc(slate->n_pr * sizeof(struct rule));
+    fill_rule_array_with_list(&(slate->product_rules), rule_array);
+  }
+
+  pa = create_explicit_automaton(slate->n_ps, slate->lhs->n_symb, rule_array, slate->n_pr, *fs_code);
+  if(rule_array != NULL){
+    free(rule_array);
+  }
+  return pa;
+}
+
+
+/*
+ * works with cyclic automata
+ */
+void intersect(const automaton a1, const automaton a2, struct intersection *target){
+  struct llist agenda;
+  struct intersection_slate slate;
+  struct index_pair fstates = {
+    .first = a1->final,
+    .second = a2->final
+  };
+  void *seen = dict_create(&pairset_params);
+  
+  
+  intersection_setup(a1, a2, &slate);
+  
+  target->state_decoder = slate.ps_decoder;
+  target->rule_decoder = slate.pr_decoder;
+
+  llist_epsilon_init(&agenda);
+  
+  struct index_pair *first_agenda_item = encode_ps(&fstates, &slate);   
+  llist_insert_left(&agenda, first_agenda_item);
+  set_item(seen, first_agenda_item, first_agenda_item);
+  
+  while(!llist_is_empty(&agenda)){
+    struct index_pair *s_pair = llist_popleft(&agenda);
+    debug_msg("expanding (%d, %d)\n", s_pair->first, s_pair->second);
+    
+    // directly use a dictionay as a set because who's got time to implementor interface a proper set ?
+    debug_msg("state pair marked as seen\n");
+    
+    // query lhs auto
+    label_to_ruleset lhs_td = a1->td_query(a1, s_pair->first);
+    debug_msg("lhs querried for parent\n");
+    intset lhs_labels = lhs_td->labels(lhs_td);
+    debug_msg("labels retrieved\n");
+    int_iterator labels_it  = lhs_labels->create_iterator(lhs_labels);
+    for(int *label = labels_it->next(labels_it); label != NULL; label = labels_it->next(labels_it)){
+      // query rhs auto for parent
+      label_to_ruleset rhs_td = a2->td_query(a2, s_pair->second);
+      
+      debug_msg("querrying both for label %d\n", *label);
+      //query both for current label
+      ruleset lhs_rules = lhs_td->query(lhs_td, *label);
+      ruleset rhs_rules = rhs_td->query(rhs_td, *label);
+      struct llist accu;
+      
+      llist_epsilon_init(&accu);
+      pair_all_rules(lhs_rules, rhs_rules, &slate, &accu);
+      
+      // retrieve rules, store them and push children states onto stack
+      while(!llist_is_empty(&accu)){	  
+	struct rule *p_rule = (struct rule *)llist_popleft(&accu);
+	llist_insert_right(&(slate.product_rules), p_rule);
+	for(int i = 0; i < p_rule->width; ++i){
+	  struct index_pair *p_child = get_item(slate.ps_decoder, &(p_rule->children[i]));
+	  struct index_pair *child_agenda_item  = get_item(seen, p_child);
+	  
+	  debug_msg("examining child: (%d, %d)\n", p_child->first, p_child->second);
+	  
+	  if(child_agenda_item == NULL){
+	    debug_msg("child is unseen, pushing onto agenda\n");
+	    llist_insert_left(&agenda, p_child);
+	    set_item(seen, p_child, p_child);
+	  }else{
+	    debug_msg("child is seen. Not doing anything\n");
+	  }	  
+	}
+      }
+      llist_destroy(&accu, NULL);	
+
+      lhs_rules->destroy(lhs_rules);
+      rhs_rules->destroy(rhs_rules);
+      rhs_td->destroy(rhs_td);
+    }
+    
+    labels_it->destroy(labels_it);
+    lhs_labels->destroy(lhs_labels);
+    lhs_td->destroy(lhs_td);
+    /*
+     * Not destroying agenda items because they all go to the state_decoder, 
+     * who will handle their destruction when it's time.
+     */
+  }
+  debug_msg("cleaning\n");
+  llist_destroy(&agenda, NULL);
+  dict_destroy(seen);
+
+  debug_msg("building product automaton\n");
+  target->a = build_product_automaton(&slate, &fstates);
+
+  debug_msg("final cleaning\n");
+  clean_nonexposed_slate_members(&slate);
+  debug_msg("done intersecting\n");
+}
+
+
+
 
 /*
  * TODO: CUT THIS NONSENSE INTO PIECES !
+ * TODO: After that use the intersection_setup introduced for generic intersection algo 
  * intersects two explicit automata
  * the automata are assumed to share a common vocabulary
+ * RHS automata MUST be acyclic (no check, infinite loop otherwise, will staturate RAM badly).
  */
 void intersect_cky(const automaton a1, const automaton a2, struct intersection *target){
 
@@ -1001,14 +1274,3 @@ void intersect_cky(const automaton a1, const automaton a2, struct intersection *
 
   debug_msg("all done\n");
 }
-
-void clean_intersection(struct intersection *inter){
-  clean_decoders(inter);
-  inter->a->destroy(inter->a);
-}
-
-void clean_decoders(struct intersection *inter){
-  dict_destroy(inter->state_decoder);
-  dict_destroy(inter->rule_decoder);
-}
-

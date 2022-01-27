@@ -1,6 +1,6 @@
-C extension for tree automata in Python
+# C extension for tree automata in Python
 
-# To build the extension
+## To build the extension
 
 clone repository, cd to it, then
 `git submodule init`

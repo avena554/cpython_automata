@@ -5,7 +5,11 @@ LDFLAGS = -g
 VGFLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
 
 avl:
-	cd avl && $(MAKE) avl.o 
+	cd avl && $(MAKE) avl.o
+
+avl.c:
+	cd avl && $(MAKE) avl.c
+
 dict.c: dict.h
 automata.c: automata.h
 

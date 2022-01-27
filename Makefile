@@ -46,7 +46,7 @@ run_test_list: test_list
 grind_test_list: test_list
 	valgrind $(VGFLAGS) ./test_list
 
-build_pyta: setup.py
+build_pyta: avl/avl.c setup.py
 	python3 setup.py build
 	cp build/lib.*/*.so pyta/
 

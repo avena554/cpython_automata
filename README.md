@@ -2,11 +2,15 @@
 
 ## To build the extension
 
-clone repository, cd to it, then
-    git submodule init`
-    git submodule update`
-    make build_pyta`
+clone repository, cd to it,
+```
+git submodule init
+git submodule update
+make build_pyta
+```
 
 Then check, with (for instance)
-    python3 edit_distance.py "hello" "lhel"
+```
+python3 edit_distance.py "hello" "lhel"
+```
 

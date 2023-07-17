@@ -1,4 +1,3 @@
-
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "automata.h"
@@ -654,27 +653,27 @@ static PyObject *pyta_intersect(PyObject *self, PyObject *args){
   return summary;
 }
 
-static PyMethodDef pyta_methods[] = {
+static PyMethodDef pyta_core_methods[] = {
   {"compile", compile_automaton, METH_VARARGS, "Build an automaton from a list of rules."},
   {"intersect_cky", pyta_intersect_cky, METH_VARARGS, "Intersect two automata. RHS automaton must be acyclic, or else very bad things will ensue."},
   {"intersect", pyta_intersect, METH_VARARGS, "Intersect two automata."},
   {NULL, NULL, 0, NULL} /*Sentinel*/
 };
 
-static struct PyModuleDef pytamodule = {
+static struct PyModuleDef pyta_core_module = {
   PyModuleDef_HEAD_INIT,
-  "pyta",
+  "pyta_core",
   "Module providing tree automata (over integer states and symbols).",
   -1,
-  pyta_methods
+  pyta_core_methods
 };
 
 
-PyMODINIT_FUNC PyInit_pyta(void){
+PyMODINIT_FUNC PyInit_pyta_core(void){
   PyObject *m;
   if(PyType_Ready(&pyta_automaton_t) < 0) return NULL;
 
-  m = PyModule_Create(&pytamodule);
+  m = PyModule_Create(&pyta_core_module);
   if(m == NULL) return NULL;
 
   Py_INCREF(&pyta_automaton_t);

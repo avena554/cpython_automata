@@ -1,4 +1,4 @@
-from pyta.automata.edit_transducer import INSERTION_PFX, DELETION_PFX, INIT_TR_PFX, CLOSE_TR_PFX, SUB_PFX
+from pyta.edit_distance.edit_transducer import INSERTION_PFX, DELETION_PFX, INIT_TR_PFX, CLOSE_TR_PFX, SUB_PFX
 import re
 
 extract_letters = re.compile('^\\w*\\((.)(?:\\|(.))?\\)$')

@@ -1,5 +1,5 @@
 import pyta
-from pyta.automata.edit_transducer import edit_transducer
+from pyta.edit_distance.edit_transducer import make_transducer
 from pyta.automata import inter, inter_ac, scores_intersection, invhom, DynamicEncoder
 from pyta.automata.semirings import inside_weight, MaxPlusSemiring, as_max_plus_element
 from pyta.algebra.LeftConcAlgebra import decompose
@@ -15,7 +15,7 @@ from sklearn.linear_model import LinearRegression
 def step(s1, s2):
     voc = set(s1).union(set(s2))
     t_sig = DynamicEncoder()
-    (t, h1, h2, scores) = edit_transducer(voc, t_sig, transpositions=True, substitutions=True)
+    (t, h1, h2, scores) = make_transducer(voc, t_sig, transpositions=True, substitutions=True)
     d_sig = DynamicEncoder()
     d1 = decompose(s1, labels_encoder=d_sig)
     d2 = decompose(s2, labels_encoder=d_sig)

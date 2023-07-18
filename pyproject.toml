@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyta_olst"
+version = "0.0.1"
+authors = [
+  { name="Antoine Venant", email="antoine.venant@umontreal.ca" },
+]
+description = "CPython extension providing fast tree automata"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Unix",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/avena554/cpython_automata"

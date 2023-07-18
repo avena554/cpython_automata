@@ -1,10 +1,10 @@
 import pyta
-from pyta.automata.edit_transducer import edit_transducer
+from pyta.edit_distance.edit_transducer import make_transducer
 from pyta.automata import inter, inter_ac, scores_intersection, invhom, DynamicEncoder
 from pyta.automata.semirings import inside_weight, MaxPlusSemiring, as_max_plus_element
 from pyta.algebra.LeftConcAlgebra import decompose
 import argparse
-from pyta.decoding import decode, read_rewrite_seq
+from pyta.edit_distance.decoding import decode, read_rewrite_seq
 
 parser = argparse.ArgumentParser(description='compute the edit distance between two strings')
 parser.add_argument('first', metavar='s1', type=str, help='the first string')

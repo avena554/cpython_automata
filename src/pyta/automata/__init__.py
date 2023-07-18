@@ -1,7 +1,7 @@
 import pyta
 from pyta.util.misc import cartesian_product
 from pyta.automata.pure_python import compile_pure, intersect_pure, intersect_ac_pure
-from pyta.pyta import intersect as intersect_fast, compile as compile_fast, intersect_cky as intersect_ac_fast
+from pyta.pyta_core import intersect as intersect_fast, compile as compile_fast, intersect_cky as intersect_ac_fast
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
 
 

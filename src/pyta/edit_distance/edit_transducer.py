@@ -84,7 +84,7 @@ def _add_final_rule(pfx, rulemap, q_0, h1, h2, epsilon):
     _add_interpretation(label, h1, h2, epsilon, epsilon)
 
 
-def edit_transducer(sigma, sig,
+def make_transducer(sigma, sig,
                     transpositions=True, substitutions=True,
                     ins_pfx=INSERTION_PFX, del_pfx=DELETION_PFX,
                     init_tr_pfx=INIT_TR_PFX, close_tr_pfx=CLOSE_TR_PFX,

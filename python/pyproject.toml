@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyta"
+version = "0.0.1.dev1"
+authors = [
+  { name="Antoine Venant", email="antoine.venant@umontreal.ca" },
+]
+description = "A python library for tree automata"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Unix",
+]
+
+[project.entry-points."pyta.compile"]
+PY = "pyta.py_backend:core.compile_pure"
+[project.entry-points."pyta.inter"]
+PY = "pyta.py_backend:core.intersect_pure"
+[project.entry-points."pyta.inter_ac"]
+PY = "pyta.py_backend:core.intersect_ac_pure"
+
+[project.scripts]
+levenstein = "pyta.edit_distance.levenstein:main"
+measure_perf = "pyta.experiments.measure_perf:main"
+
+
+[project.urls]
+"Homepage" = "https://github.com/avena554/cpython_automata"

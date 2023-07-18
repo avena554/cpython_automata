@@ -1,0 +1,8 @@
+[pyta.compile]
+PY = pyta_ext:compile
+
+[pyta.inter]
+PY = pyta_ext:intersect
+
+[pyta.inter_ac]
+PY = pyta_ext:intersect_cky

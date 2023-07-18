@@ -1,0 +1,28 @@
+Metadata-Version: 2.1
+Name: pyta-c-backend
+Version: 0.0.1.dev1
+Summary: CPython backend for the Pyta library
+Author-email: Antoine Venant <antoine.venant@umontreal.ca>
+Project-URL: Homepage, https://github.com/avena554/cpython_automata
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Operating System :: Unix
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# C extension for tree automata in Python
+
+## To build the extension
+
+clone repository, cd to it,
+```
+git submodule init
+git submodule update
+make build_pyta
+```
+
+Then check, with (for instance)
+```
+python3 edit_distance.py "hello" "lhel"
+```
+

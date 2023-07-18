@@ -1,35 +1,8 @@
 import pyta
 from pyta.util.misc import cartesian_product
-from pyta.automata.pure_python import compile_pure, intersect_pure, intersect_ac_pure
-from pyta.pyta_core import intersect as intersect_fast, compile as compile_fast, intersect_cky as intersect_ac_fast
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
 
-
-def core_compile(n_states, n_symb, rules, final):
-    if pyta.MODE is pyta.C:
-        return compile_fast(n_states, n_symb, rules, final)
-    elif pyta.MODE is pyta.Python:
-        return compile_pure(n_states, n_symb, rules, final)
-    else:
-        raise NotImplementedError
-
-
-def core_intersect(a1, a2):
-    if pyta.MODE is pyta.C:
-        return intersect_fast(a1, a2)
-    elif pyta.MODE is pyta.Python:
-        return intersect_pure(a1, a2)
-    else:
-        raise NotImplementedError
-
-
-def core_intersect_ac(a1, a2):
-    if pyta.MODE is pyta.C:
-        return intersect_ac_fast(a1, a2)
-    elif pyta.MODE is pyta.Python:
-        return intersect_ac_pure(a1, a2)
-    else:
-        raise NotImplementedError
+(core_compile, core_intersect, core_intersect_ac) = pyta.get_core()
 
 
 class PyTA:

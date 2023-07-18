@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyta_olst"
-version = "0.0.1"
+name = "pyta_c_backend"
+version = "0.0.1.dev1"
 authors = [
   { name="Antoine Venant", email="antoine.venant@umontreal.ca" },
 ]
-description = "CPython extension providing fast tree automata"
+description = "CPython backend for the Pyta library"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -16,6 +16,14 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: Unix",
 ]
+
+[project.entry-points."pyta.compile"]
+C = "pyta_c_backend:compile"
+[project.entry-points."pyta.inter"]
+C = "pyta_c_backend:intersect"
+[project.entry-points."pyta.inter_ac"]
+C = "pyta_c_backend:intersect_cky"
+
 
 [project.urls]
 "Homepage" = "https://github.com/avena554/cpython_automata"

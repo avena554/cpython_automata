@@ -1,7 +1,6 @@
 import pyta
 from pyta.edit_distance.edit_transducer import make_transducer
-from pyta.automata import inter, inter_ac, scores_intersection, invhom, DynamicEncoder
-from pyta.automata.semirings import inside_weight, MaxPlusSemiring, as_max_plus_element
+from pyta.automata import inter, inter_ac, invhom, DynamicEncoder
 from pyta.algebra.LeftConcAlgebra import decompose
 import numpy as np
 import numpy.random as rd
@@ -11,6 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LinearRegression
+
 
 def step(s1, s2):
     voc = set(s1).union(set(s2))
@@ -47,32 +47,37 @@ def gen_data(n, min_size, max_size):
     return points
 
 
-M = 20
-m = 0
-n = 20
-data = gen_data(n, m, M)
-label = "C"
-pyta.MODE = pyta.C
-for k in range(2):
-    Y = []
-    for i in range(m, M):
-        T = 0.
-        for j in range(n):
-            print("{:d}-{:d}/{:s} and {:s}".format(i, j, *data[i - m][j]))
-            T += step(*data[i - m][j])
-        Y.append(T/(M - m))
-    plt.plot(range(m, M), Y, label=label)
-    pyta.MODE = pyta.Python
-    label = "Python"
+def main():
+    M = 20
+    m = 0
+    n = 20
+    data = gen_data(n, m, M)
+    label = "C"
+    pyta.c_mode()
+    for k in range(2):
+        Y = []
+        for i in range(m, M):
+            T = 0.
+            for j in range(n):
+                print("{:d}-{:d}/{:s} and {:s}".format(i, j, *data[i - m][j]))
+                T += step(*data[i - m][j])
+            Y.append(T/(M - m))
+        plt.plot(range(m, M), Y, label=label)
+        pyta.py_mode()
+        label = "Python"
 
-polyreg = make_pipeline(PolynomialFeatures(2), LinearRegression())
-X = np.array(range(m, M)).reshape(-1, 1)
-print(X)
-polyreg.fit(X, Y)
-plt.plot(range(m, M), [polyreg.predict(np.array([x]).reshape(-1, 1)) for x in range(m, M)], label="deg 2 reg")
-plt.ylabel("time (s)")
-plt.xlabel("seq len")
-plt.legend()
-plt.show()
+    polyreg = make_pipeline(PolynomialFeatures(2), LinearRegression())
+    X = np.array(range(m, M)).reshape(-1, 1)
+    print(X)
+    polyreg.fit(X, Y)
+    plt.plot(range(m, M), [polyreg.predict(np.array([x]).reshape(-1, 1)) for x in range(m, M)], label="deg 2 reg")
+    plt.ylabel("time (s)")
+    plt.xlabel("seq len")
+    plt.legend()
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
 
 

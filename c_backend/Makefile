@@ -56,7 +56,6 @@ install: avl/avl.c
 	pip3 install dist/pyta_c_backend-*.whl
 
 clean:
-	cd pyta
 	rm -f *.o
 	rm -f test_dict 
 	$(MAKE) -C avl clean

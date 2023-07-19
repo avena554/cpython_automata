@@ -48,8 +48,16 @@ run_test_list: pyta/test_list
 grind_test_list: pyta/test_list
 	valgrind $(VGFLAGS) pyta/test_list
 
+build_pyta: avl.c
+	python3 setup.py build
+
+install: avl.c
+	python3 -m build
+	pip3 install dist/pyta_c_backend-*.whl
+
 clean:
 	cd pyta
 	rm -f *.o
 	rm -f test_dict 
-	$(MAKE) -C pyta/avl clean
+	$(MAKE) -C avl clean
+	rm -rf build/

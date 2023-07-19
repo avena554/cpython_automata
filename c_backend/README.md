@@ -1,16 +1,8 @@
 # C extension for tree automata in Python
 
-## To build the extension
-
-clone repository, cd to it,
+## Installation instruction
+Installation will build then install a python package. You might want to activate a local python virtual environment of your choice beforehand. 
 ```
-git submodule init
-git submodule update
-make build_pyta
-```
-
-Then check, with (for instance)
-```
-python3 edit_distance.py "hello" "lhel"
+make install
 ```
 

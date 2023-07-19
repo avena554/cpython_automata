@@ -48,10 +48,10 @@ run_test_list: test_list
 grind_test_list: test_list
 	valgrind $(VGFLAGS) test_list
 
-build_pyta: avl.c
+build_pyta: avl/avl.c
 	python3 setup.py build
 
-install: avl.c
+install: avl/avl.c
 	python3 -m build
 	pip3 install dist/pyta_c_backend-*.whl
 

@@ -4,49 +4,49 @@ CFLAGS =  -g -W -Wall -Wextra -std=c11 -DDEBUG=$(DEBUG)# enable many GCC warning
 LDFLAGS = -g
 VGFLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose
 
-pyta/avl:
-	$(MAKE) -C pyta/avl avl.o
+avl:
+	$(MAKE) -C avl avl.o
 
-pyta/avl/avl.c:
-	$(MAKE) -C pyta/avl avl.c
+avl/avl.c:
+	$(MAKE) -C avl avl.c
 
-avl_src: pyta/avl/avl.c
+avl_src: avl/avl.c
 
-pyta/dict.c: pyta/dict.h
-pyta/automata.c: automata.h
+dict.c: dict.h
+automata.c: automata.h
 
-pyta/dict.o: pyta/dict.c pyta/avl
-	$(CC) $(CFLAGS) -c  pyta/dict.c -o $@
+dict.o: dict.c avl
+	$(CC) $(CFLAGS) -c  dict.c -o $@
 
-pyta/test_dict: pyta/dict.o pyta/avl/avl.o pyta/list.o pyta/utils.o pyta/test_dict.c
-pyta/test_automata: pyta/automata.o pyta/dict.o pyta/avl/avl.o pyta/utils.o pyta/list.o pyta/test_automata.c
+test_dict: dict.o avl/avl.o list.o utils.o test_dict.c
+test_automata: automata.o dict.o avl/avl.o utils.o list.o test_automata.c
 
-pyta/test_inter: pyta/automata.o pyta/dict.o pyta/avl/avl.o pyta/utils.o pyta/list.o pyta/test_inter.c
+test_inter: automata.o dict.o avl/avl.o utils.o list.o test_inter.c
 
-grind_inter: pyta/test_inter
-	valgrind $(VGFLAGS) pyta/test_inter
+grind_inter: test_inter
+	valgrind $(VGFLAGS) test_inter
 
-run_test_automata: pyta/test_automata
-	pyta/test_automata
+run_test_automata: test_automata
+	test_automata
 
-grind_test_automata: pyta/test_automata
-	valgrind $(VGFLAGS) pyta/test_automata
+grind_test_automata: test_automata
+	valgrind $(VGFLAGS) test_automata
 
-pyta/test_list: pyta/list.o pyta/test_list.c
+test_list: list.o test_list.c
 
-pyta/test_utils: pyta/utils.o pyta/test_utils.c
+test_utils: utils.o test_utils.c
 
-run_test_utils: pyta/test_utils
-	pyta/test_utils
+run_test_utils: test_utils
+	test_utils
 
-grind_test_utils: pyta/test_utils
-	valgrind $(VGFLAGS) pyta/test_utils
+grind_test_utils: test_utils
+	valgrind $(VGFLAGS) test_utils
 
-run_test_list: pyta/test_list
-	pyta/test_list
+run_test_list: test_list
+	test_list
 
-grind_test_list: pyta/test_list
-	valgrind $(VGFLAGS) pyta/test_list
+grind_test_list: test_list
+	valgrind $(VGFLAGS) test_list
 
 build_pyta: avl.c
 	python3 setup.py build

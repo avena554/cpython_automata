@@ -53,7 +53,7 @@ build_pyta: avl/avl.c
 
 install: avl/avl.c
 	python3 -m build
-	pip3 install dist/pyta_c_backend-*.whl
+	pip3 install dist/pyta_c_backend-*.whl --force-reinstall
 
 clean:
 	rm -f *.o

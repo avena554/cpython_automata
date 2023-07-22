@@ -6,7 +6,7 @@ def inside_weight(a, scores, semiring, as_sr_element, start, out):
         inside = semiring.zero
         for rule in a.td_all(start):
             for child in a.get_rule(rule)[2]:
-                if(child == a.get_rule(rule)[0]):
+                if child == a.get_rule(rule)[0]:
                     print("loop!")
                     print(rule, a.get_rule(rule))
                     exit(0)

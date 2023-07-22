@@ -287,14 +287,15 @@ def generate_pure(ta, weights, state, rng, use_prob=True, n_samples=1):
 
         samples.append(Term(label=choice,
                             children=[
-                                generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob) for child_state in children_states
+                                generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob)
+                                for child_state in children_states
                             ])
                        )
     return samples
 
 
 def derive(ta, dt):
-    label = ta.labels_decoder.decode(ta.rules_decoder.decode(ta.label)[1])
+    label = ta.labels_decoder.decode(ta.rules_decoder.decode(dt.label)[1])
     return Term(label=label, children=[derive(ta, child) for child in dt.children])
 
 

@@ -295,7 +295,7 @@ def generate_pure(ta, weights, state, rng, use_prob=True, n_samples=1):
 
 
 def derive(ta, dt):
-    label = ta.labels_decoder.decode(ta.rules_decoder.decode(dt.label)[1])
+    label = ta.rules_decoder.decode(dt.label)[1]
     return Term(label=label, children=[derive(ta, child) for child in dt.children])
 
 

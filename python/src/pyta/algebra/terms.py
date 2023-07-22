@@ -81,9 +81,3 @@ class Term:
 
     def __repr__(self):
         return str(self)
-
-    def label(self):
-        return self.label
-    
-    def children(self):
-        return self.children

@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import pyta
 from pyta.util.misc import cartesian_product
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
@@ -41,6 +43,9 @@ class PyTA:
 
     def all_rules(self):
         return [(r, self.get_rule(r)) for r in range(self.n_rules)]
+
+    def decode_final(self):
+        return self.states_decoder.decode(self.final)
 
     def run_bu(self, term, children_states):
         root_out = []
@@ -101,12 +106,13 @@ class PyTA:
 
         return root_out[0]
 
+    def decode_rule(self, rule):
+        return (self.states_decoder.decode(rule[0]),
+                self.labels_decoder.decode(rule[1]),
+                tuple(self.states_decoder.decode(child_id) for child_id in rule[2]))
+
     def decode_rules(self):
-        return {self.rules_decoder.decode(r_id): (self.states_decoder.decode(rule[0]),
-                                                  self.labels_decoder.decode(rule[1]),
-                                                  tuple(self.states_decoder.decode(child_id)
-                                                        for child_id in rule[2]))
-                for r_id, rule in self.all_rules()}
+        return {self.rules_decoder.decode(r_id): self.decode_rule(rule) for r_id, rule in self.all_rules()}
 
     def __str__(self):
         return rulemap_as_string(self.decode_rules())
@@ -204,3 +210,58 @@ def scores_intersection(product_a, scores_left=None, scores_right=None, op=keep_
         )
         for rule in range(product_a.n_rules)
     }
+
+
+def _init_n_deps(rules, r_to_n, n_to_r, safe):
+    for i, rule in rules:
+        n = len([state for state in set(rule[2]) if state not in safe])
+        r_to_n[i] = n
+        n_to_r[n].add(i)
+
+
+def _index_by_children(rules):
+    child_index = defaultdict(set)
+
+    for i, rule in rules:
+        for state in rule[2]:
+            child_index[state].add(i)
+
+    return child_index
+
+
+def prune_dead_states_pure(ta, max_arity):
+    rules = ta.all_rules()
+    rule_corresp = [-1 for _ in range(ta.n_rules)]
+    n_pruned_rules = 0
+    safe = set(ta.bu_all(()))
+    r_to_n = [0 for _ in range(ta.n_rules)]
+    n_to_r = [set() for _ in range(max_arity + 1)]
+    _init_n_deps(rules, r_to_n, n_to_r, safe)
+    child_index = _index_by_children(rules)
+
+    pruned_rm = {}
+    while n_to_r[0]:
+        rule_index = n_to_r[0].pop()
+        rule = ta.get_rule(rule_index)
+        safe_state = rule[0]
+        pruned_rm[n_pruned_rules] = rule
+        rule_corresp[n_pruned_rules] = rule_index
+        n_pruned_rules += 1
+
+        if safe_state not in safe:
+            safe.add(safe_state)
+            for rule_to_update in child_index[safe_state]:
+                old_value = r_to_n[rule_to_update]
+                r_to_n[rule_to_update] = old_value - 1
+                n_to_r[old_value].remove(rule_to_update)
+                n_to_r[old_value - 1].add(rule_to_update)
+
+    return pruned_rm, rule_corresp
+
+
+def prune_dead_states(ta, max_arity):
+    pruned_rm, corresp = prune_dead_states_pure(ta, max_arity)
+
+    pruned_decoded_rm = {ta.rules_decoder.decode(corresp[r_id]): ta.decode_rule(rule)
+                         for r_id, rule in pruned_rm.items()}
+    return compile_automaton(pruned_decoded_rm, ta.decode_final(), ta.labels_decoder)

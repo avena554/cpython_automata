@@ -273,7 +273,7 @@ def generate_pure(ta, weights, state, rng, use_prob=True, n_samples=1):
     samples = []
     for _ in range(n_samples):
         rules = ta.td_all(state)
-        print([ta.decode_rule for rule in rules])
+        print([ta.decode_rule(rule) for rule in rules])
         indices = range(len(rules))
         p = [weights[r] for r in rules]
         if not use_prob:

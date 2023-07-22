@@ -268,35 +268,30 @@ def prune_dead_states(ta, max_arity):
     return compile_automaton(pruned_decoded_rm, ta.decode_final(), ta.labels_decoder)
 
 
-def generate_pure(ta, weights, state, rng, use_prob=True, n_samples=1):
-    print(ta.states_decoder.decode(state))
-    samples = []
-    for _ in range(n_samples):
-        rules = ta.td_all(state)
-        print([ta.decode_rule(ta.get_rule(r_id)) for r_id in rules])
-        indices = range(len(rules))
-        p = [weights[r] for r in rules]
-        if not use_prob:
-            p = None
-        chosen_index = rng.choice(indices, p=p)
-        choice = rules[chosen_index]
-        children_states = ta.get_rule(choice)[2]
+def _generate_pure(ta, weights, state, rng, use_prob=True):
+    rules = ta.td_all(state)
+    indices = range(len(rules))
+    p = [weights[r] for r in rules]
+    if not use_prob:
+        p = None
+    chosen_index = rng.choice(indices, p=p)
+    choice = rules[chosen_index]
+    children_states = ta.get_rule(choice)[2]
 
-        # choose a lexicalized rule,
-        # eg, ('S_rencontrer', ('DP_journaliste', 'VP_rencontrer'), 0.007426463450150471)
+    # choose a lexicalized rule,
+    # eg, ('S_rencontrer', ('DP_journaliste', 'VP_rencontrer'), 0.007426463450150471)
 
-        samples.append(Term(label=choice,
-                            children=[
-                                generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob)
-                                for child_state in children_states
-                            ])
-                       )
-    return samples
+    return Term(label=choice,
+                children=[_generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob) for child_state in
+                          children_states])
+
+
+def generate_pure(ta, weights, states, rng, use_prob=True, n_samples=1):
+    return [_generate_pure(ta, weights, states, rng, use_prob) for _ in range(n_samples)]
 
 
 def derive(ta, dt):
-    print(dt)
-    label = ta.rules_decoder.decode(dt.label)[1]
+    label = ta.labels_decoder.decode(ta.get_rule(int(dt.label))[1])
     return Term(label=label, children=[derive(ta, child) for child in dt.children])
 
 

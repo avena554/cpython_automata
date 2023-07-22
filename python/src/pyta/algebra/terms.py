@@ -42,7 +42,7 @@ class Term:
 
     def pretty_format(self, var_transform, op_transform, const_transform):
         if self.children:
-            return op_transform(self.label,
+            return op_transform(str(self.label),
                                 *[child.pretty_format(var_transform, op_transform, const_transform)
                                   for child in self.children]
                                 )
@@ -54,13 +54,12 @@ class Term:
                 return const_transform(self.label)
 
     def remap(self, labels_encoder):
-        var_id =  self.get_var_id();
+        var_id = self.get_var_id()
         if var_id is not None:
             return self
         else:
             return Term(labels_encoder.encode(self.label), [child.remap(labels_encoder) for child in self.children])
     
-
     @staticmethod
     def var_transform(_, var_id):
         return 'x_%d' % var_id
@@ -71,7 +70,7 @@ class Term:
 
     @staticmethod
     def const_transform(label):
-        return label
+        return str(label)
 
     def __str__(self):
         return self.pretty_format(

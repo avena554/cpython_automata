@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import pyta
+from pyta.algebra.terms import Term
 from pyta.util.misc import cartesian_product
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
 
@@ -265,3 +266,37 @@ def prune_dead_states(ta, max_arity):
     pruned_decoded_rm = {ta.rules_decoder.decode(corresp[r_id]): ta.decode_rule(rule)
                          for r_id, rule in pruned_rm.items()}
     return compile_automaton(pruned_decoded_rm, ta.decode_final(), ta.labels_decoder)
+
+
+def generate_pure(ta, weights, state, rng, use_prob=True, n_samples=1):
+    samples = []
+    for _ in range(n_samples):
+        rules = ta.td_all(state)
+        indices = range(len(rules))
+        p = [weights[r] for r in rules]
+        if not use_prob:
+            p = None
+        chosen_index = rng.choice(indices, p=p)
+        choice = rules[chosen_index]
+        children_states = ta.get_rule(choice)[2]
+
+        # choose a lexicalized rule,
+        # eg, ('S_rencontrer', ('DP_journaliste', 'VP_rencontrer'), 0.007426463450150471)
+
+        samples.append(Term(label=choice,
+                            children=[
+                                generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob) for child_state in children_states
+                            ])
+                       )
+    return samples
+
+
+def derive(ta, dt):
+    label = ta.labels_decoder.decode(ta.rules_decoder.decode(ta.label)[1])
+    return Term(label=label, children=[derive(ta, child) for child in dt.children])
+
+
+def generate(ta, weights, state, rng, use_prob=True, n_samples=1):
+    derivation_ts = generate_pure(ta, weights, state, rng, use_prob, n_samples)
+    derived_ts = [derive(ta, dt) for dt in derivation_ts]
+    return list(zip(derivation_ts, derived_ts))

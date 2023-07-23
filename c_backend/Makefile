@@ -60,3 +60,4 @@ clean:
 	rm -f test_dict 
 	$(MAKE) -C avl clean
 	rm -rf build/
+	rm -rf dist/

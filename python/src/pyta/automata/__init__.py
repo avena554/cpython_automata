@@ -101,7 +101,7 @@ class PyTA:
                 # compose continuations
                 agenda.append((children[-1], f_reduce_g_cont(label, collect_cont(cv), next_item[1], cv)))
 
-                for i in range(-2, -len(children) - 1):
+                for i in range(-2, -len(children) - 1, -1):
                     # for these just collect
                     agenda.append((children[i], collect_cont(cv)))
 
@@ -151,16 +151,23 @@ def compile_automaton(rulemap, final, labels_encoder):
 # FIXME: this is super false and will not work for anything else that string automaton
 def invhom(h, a, lhs_encoder, rhs_encoder):
     rulemap = {}
+    cache = {}
 
     for (l, im) in h.items():
-        remapped = im.remap(rhs_encoder)
-        var_list = remapped.get_vars()
-        candidates = tuple([a.states] * len(var_list))
-        for candidate in cartesian_product(*candidates):
-            # print('candidate: ', candidate)
-            reached = a.run_bu(remapped, ({state} for state in candidate))
-            # print('parent: ', reached)
+        if im not in cache:
+            trs = []
+            remapped = im.remap(rhs_encoder)
+            var_list = remapped.get_vars()
+            candidates = tuple([a.states] * len(var_list))
+            for candidate in cartesian_product(*candidates):
+                # print('candidate: ', candidate)
+                reached = a.run_bu(remapped, ({state} for state in candidate))
+                # print('parent: ', reached)
+                trs.append((candidate, reached))
+            cache[im] = trs
 
+        trs = cache[im]
+        for (candidate, reached) in trs:
             rulemap.update(
                 {'<%s[%s to %s]>' % (l, parent_state, str(candidate)): (parent_state, l, candidate)
                  for parent_state in reached}

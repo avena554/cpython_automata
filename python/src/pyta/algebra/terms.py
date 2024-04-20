@@ -81,3 +81,10 @@ class Term:
 
     def __repr__(self):
         return str(self)
+
+    def __eq__(self, other):
+        return self.label == other.label and self.children == other.children
+
+    def __hash__(self):
+        # Fixme: hacky
+        return hash(str(self))

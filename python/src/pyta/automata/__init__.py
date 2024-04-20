@@ -241,7 +241,7 @@ def prune_dead_states_pure(ta, max_arity):
     rules = ta.all_rules()
     rule_corresp = [-1 for _ in range(ta.n_rules)]
     n_pruned_rules = 0
-    safe = set(ta.bu_all(()))
+    safe = set([ta.get_rule(r)[0] for r in ta.bu_all(())])
     r_to_n = [0 for _ in range(ta.n_rules)]
     n_to_r = [set() for _ in range(max_arity + 1)]
     _init_n_deps(rules, r_to_n, n_to_r, safe)

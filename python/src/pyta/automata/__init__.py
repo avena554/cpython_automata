@@ -48,6 +48,50 @@ class PyTA:
     def decode_final(self):
         return self.states_decoder.decode(self.final)
 
+    def run_td(self, term, parent_states):
+        memory = defaultdict(lambda: defaultdict(set))
+        agenda = [[term, parent_states, (), False]]
+
+        while agenda:
+            (subterm, candidates, pos, reduce) = agenda.pop()
+            # print(subterm, reduce)
+            if subterm.get_var_id() is not None:
+                for s in candidates:
+                    memory[pos][s].update([(s,)])
+                continue
+
+            if not reduce:
+                agenda.append([subterm, candidates, pos, True])
+                label = subterm.label
+                c_candidates = [set() for _ in subterm.children]
+                for parent in candidates:
+                    for r in self.td_query(parent, label):
+                        rule = self.get_rule(r)
+                        for c_c, state in zip(c_candidates, rule[2]):
+                            c_c.add(state)
+
+                for i, (c_c, child) in enumerate(zip(c_candidates, subterm.children)):
+                    agenda.append([child, c_c, pos + (i,), False])
+
+            else:
+                label = subterm.label
+                for parent in candidates:
+                    for r in self.td_query(parent, label):
+                        children_candidates = {()}
+                        rule = self.get_rule(r)
+                        for i, child_state in enumerate(rule[2]):
+                            next_candidates = set()
+                            child_candidates = memory[pos + (i,)][child_state]
+                            for prefix in children_candidates:
+                                for suffix in child_candidates:
+                                    next_candidates.add(prefix + suffix)
+
+                            children_candidates = next_candidates
+
+                        memory[pos][parent].update(children_candidates)
+
+        return memory[()]
+
     def run_bu(self, term, children_states):
         root_out = []
 
@@ -148,8 +192,8 @@ def compile_automaton(rulemap, final, labels_encoder):
         )
 
 
-# FIXME: this is super false and will not work for anything else that string automaton
-def invhom(h, a, lhs_encoder, rhs_encoder):
+# FIXME: will probably not work for anything else that string automaton
+def invhom_(h, a, lhs_encoder, rhs_encoder):
     rulemap = {}
     cache = {}
 
@@ -172,6 +216,29 @@ def invhom(h, a, lhs_encoder, rhs_encoder):
                 {'<%s[%s to %s]>' % (l, parent_state, str(candidate)): (parent_state, l, candidate)
                  for parent_state in reached}
             )
+
+    return compile_automaton(rulemap, a.final, lhs_encoder)
+
+
+def invhom(h, a, lhs_encoder, rhs_encoder):
+    rulemap = {}
+    cache = {}
+
+    for (l, im) in h.items():
+        if im not in cache:
+            trs = []
+            remapped = im.remap(rhs_encoder)
+            candidates = a.states
+            inv_rules = a.run_td(remapped, candidates)
+            for candidate in candidates:
+                for reached in inv_rules[candidate]:
+                    trs.append((candidate, reached))
+
+            cache[im] = trs
+
+        trs = cache[im]
+        for (candidate, reached) in trs:
+            rulemap['<%s[%s to %s]>' % (l, candidate, str(reached))] = (candidate, l, reached)
 
     return compile_automaton(rulemap, a.final, lhs_encoder)
 

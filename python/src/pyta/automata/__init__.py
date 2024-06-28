@@ -361,7 +361,8 @@ def _generate_pure(ta, weights, state, rng, use_prob=True):
 
 
 def generate_pure(ta, weights, states, rng, use_prob=True, n_samples=1):
-    return [_generate_pure(ta, weights, states, rng, use_prob) for _ in range(n_samples)]
+    for _ in range(n_samples):
+        yield _generate_pure(ta, weights, states, rng, use_prob)
 
 
 def derive(ta, dt):
@@ -370,6 +371,6 @@ def derive(ta, dt):
 
 
 def generate(ta, weights, state, rng, use_prob=True, n_samples=1):
-    derivation_ts = generate_pure(ta, weights, state, rng, use_prob, n_samples)
-    derived_ts = [derive(ta, dt) for dt in derivation_ts]
-    return list(zip(derivation_ts, derived_ts))
+    for dt in generate_pure(ta, weights, state, rng, use_prob, n_samples):
+        derived_t = derive(ta, dt)
+        yield dt, derived_t

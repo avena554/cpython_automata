@@ -5,6 +5,8 @@ from pyta.algebra.terms import Term
 from pyta.util.misc import cartesian_product
 from pyta.util.encoders import DynamicEncoder, StaticDecoder
 
+import numpy as np
+
 (core_compile, core_intersect, core_intersect_ac) = pyta.get_core()
 
 
@@ -350,14 +352,16 @@ def _generate_pure(ta, weights, state, rng, use_prob=True):
         p = None
     chosen_index = rng.choice(indices, p=p)
     choice = rules[chosen_index]
+    logit_choice = np.log(weights[choice])
     children_states = ta.get_rule(choice)[2]
 
-    # choose a lexicalized rule,
-    # eg, ('S_rencontrer', ('DP_journaliste', 'VP_rencontrer'), 0.007426463450150471)
+    children_and_logits = [_generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob)
+                           for child_state in children_states]
+    children = [c_l[0] for c_l in children_and_logits]
+    all_children_logit = np.sum([c_l[1] for c_l in children_and_logits])
+    logit = logit_choice + all_children_logit
 
-    return Term(label=choice,
-                children=[_generate_pure(ta, weights, child_state, rng=rng, use_prob=use_prob) for child_state in
-                          children_states])
+    return Term(label=choice, children=children), logit
 
 
 def generate_pure(ta, weights, states, rng, use_prob=True, n_samples=1):
@@ -371,6 +375,6 @@ def derive(ta, dt):
 
 
 def generate(ta, weights, state, rng, use_prob=True, n_samples=1):
-    for dt in generate_pure(ta, weights, state, rng, use_prob, n_samples):
+    for dt, logit in generate_pure(ta, weights, state, rng, use_prob, n_samples):
         derived_t = derive(ta, dt)
-        yield dt, derived_t
+        yield dt, derived_t, logit
